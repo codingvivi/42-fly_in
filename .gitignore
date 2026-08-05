@@ -1,0 +1,48 @@
+# python
+__pycache__
+*.py[cod]
+*.egg
+*.egg-info/
+
+# tools
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# worktrees (and workspaces for jj)
+.worktrees/
+.workspaces/
+
+# build
+build/
+dist/
+
+# reusable package build artifacts — kept out of THIS repo. The turn-in
+# tarball (`make dist`) ships them at its root with a .gitignore that
+# tracks them, for committing into the school intranet repo.
+mazegen-*.whl
+mazegen-*.tar.gz
+
+# coverage
+.coverage
+htmlcov/
+
+# environment
+.env
+.venv/
+
+# logs
+*.log
+
+# os
+.DS_Store
+Thumbs.db
+
+# not mine
+docs/42
+
+# local / personal
+CLAUDE.md
+
+# output file
+output_maze.txt
