@@ -1,9 +1,11 @@
-from dataclassses import dataclass
+from pathlib import Path
+
+from .network import Network
 
 
-@dataclass(frozen=True)
 class MapParser:
-    test: str
+    def __init__(self, path: Path) -> None:
+        self._path: Path = path
 
-    def parse(self) -> None:
-        self.test = "Hellowww world"
+    def parse(self) -> Network:
+        return Network(breast=str(self._path))

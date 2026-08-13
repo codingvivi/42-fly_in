@@ -10,7 +10,10 @@ VENDOR_DIR := vendor
 MAP ?= $(DATA_DIR)/maps/easy/01_linear_path.txt
 
 # everything the linters look at
-LINT_PATHS := $(SRC_DIR) $(TEST_DIR)
+# (tests are only included once they exist: mypy errors out on a directory
+# that holds no .py files at all)
+TEST_PY    := $(wildcard $(TEST_DIR)/*.py)
+LINT_PATHS := $(SRC_DIR) $(if $(TEST_PY),$(TEST_DIR))
 
 MYPY_FLAGS := --warn-return-any --warn-unused-ignores --ignore-missing-imports \
               --disallow-untyped-defs --check-untyped-defs
