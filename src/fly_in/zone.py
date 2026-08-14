@@ -3,6 +3,11 @@ from pydantic import Field
 from pydantic.dataclasses import dataclass
 
 
+class Location(Enum):
+    x: int
+    y: int
+
+
 class ZoneType(Enum):
     PRIORITY = "priority"
     NORMAL = "normal"
