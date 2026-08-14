@@ -11,27 +11,22 @@ class Connection:
     zones: frozenset[Zone] = Field(min_length=2, max_length=2)
     max_drones: int = Field(default=1, ge=1)
 
-    # normal init call:
-    # Connection(frozenset({A, B}))
-    # with this classmethod:
-    # Connection.between(A, B)
-    @classmethod
-    def between(cls, a: Zone, b: Zone, max_drones: int = 1) -> Self:
-        if a == b:
-            raise ValueError(f"self-loop on {a.name!r}")
-        return cls(frozenset({a, b}))
-
     def connected_to(self, z: Zone) -> Zone:
         if z not in self.zones:
             raise KeyError(f"{z.name!r} not in this connection")
-        other = self.zones - {z}
+        # (element,) unpacks one element iterable
+        # should complain if more than one member
+        (other,) = self.zones - {z}
         return other
 
 
 @dataclass
 class Network:
     drones: frozenset[Drone]
+    start: Zone
+    end: Zone
+    zones: frozenset[Zone]
     connections: frozenset[Connection]
+    occupancy: dict[Drone, Zone | Connection]
 
-    def link(self) -> None:
-        print(self.breast)
+    def link(self) -> None: ...

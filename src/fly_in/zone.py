@@ -3,7 +3,8 @@ from pydantic import Field
 from pydantic.dataclasses import dataclass
 
 
-class Location(Enum):
+@dataclass
+class Location:
     x: int
     y: int
 
@@ -26,7 +27,6 @@ class ZoneType(Enum):
     def is_preferred(self) -> bool:
         return self is ZoneType.PRIORITY
 
-    @property
     def __str__(self) -> str:
         return self.value
 
@@ -34,6 +34,7 @@ class ZoneType(Enum):
 @dataclass(frozen=True)
 class Zone:
     name: str
+    coordinates: Location
     type: ZoneType = ZoneType.NORMAL
     color: str | None = None
     max_drones: int = Field(default=1, ge=1)
