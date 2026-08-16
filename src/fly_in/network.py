@@ -1,8 +1,8 @@
-from .drones import Drone
-from .zone import Zone
-
 from pydantic import Field
 from pydantic.dataclasses import dataclass
+
+from .drones import Drone
+from .zone import Zone
 
 
 @dataclass(frozen=True)
