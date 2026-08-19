@@ -16,8 +16,7 @@ def main(argv: list[str]) -> int:
         return 2
 
     try:
-        network = MapParser(Path(argv[CliArgs.PATH])).parse()
-        network.breast
+        network = MapParser(Path(argv[CliArgs.PATH])).parse_file()
         network.link()
     except Exception as e:
         print(f"{type(e).__name__}: {e}", file=sys.stderr)

@@ -33,7 +33,7 @@ class ZoneType(Enum):
 
 
 @dataclass(frozen=True)
-class Zone:
+class Hub:
     name: str
     coordinates: Location
     type: ZoneType = ZoneType.NORMAL

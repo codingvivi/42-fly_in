@@ -1,9 +1,11 @@
 from enum import StrEnum
+from collections.abc import Iterator
 from pathlib import Path
+
 
 from .drones import Drone
 from .network import Connection, Network
-from .zone import Zone
+from .hub import Hub, Location, ZoneType
 
 
 class ParseError(Exception):
@@ -11,7 +13,7 @@ class ParseError(Exception):
         super().__init__(f"line{line_nbr}: {cause}")
 
 
-class Keyword(StrEnum):
+class ZoneKey(StrEnum):
     DRONE_COUNT = "nb_drones"
     START = "start_hub"
     HUB = "hub"
@@ -23,7 +25,7 @@ class MapParser:
     def __init__(self, path: Path) -> None:
         self._path: Path = path
 
-    def _meaningful(self) -> Iterator[tuple[int, str]]:
+    def _cleaned_data(self) -> Iterator[tuple[int, str]]:
         with open(self._path) as mapfile:
             file_data = mapfile.readlines()
             for line_nbr, raw_data in enumerate(file_data):
@@ -35,26 +37,50 @@ class MapParser:
                     continue
 
                 yield line_nbr, clean_data
-    def 
 
-    def parse(self) -> Network:
+    @staticmethod
+    def _parse_hub(
+        line_nr: int,
+        name: str,
+        coordinates: Location,
+        type: ZoneType,
+        color: str,
+        max_drones: int,
+    ) -> Hub: ...
+
+    def parse_file(self) -> Network:
         drones: set[Drone]
-        start: Zone
-        end: Zone
-        zones: set[Zone]
+        start: Hub
+        end: Hub
+        hubs: set[Hub]
         connections: set[Connection]
 
-        for line_nbr, data in self._meaningful():
-            match data.split():
-                case [Keyword.DRONE_COUNT, count]:
+        for line_nbr, data in self._cleaned_data():
+            # split into keyword and rest
+            keyword, config_data = data.split(maxsplit=1)
+            if not keyword.endswith(":"):
+                raise ParseError(
+                    line_nbr, 'Required format: "keyword: config"'
+                )
+            if not config_data:
+                raise ParseError(line_nbr, "Keyword needs an argument")
+
+            # match keywords and create values
+            match [keyword, config_data.split()]:
+                #
+                case [ZoneKey.DRONE_COUNT, *count]:
                     if line_nbr != -1:
                         raise ParseError(
                             line_nbr, "Drone count needs to be on line 1"
                         )
+                    drones = set(
+                        [Drone(id=int(drone_nr)) for drone_nr in count]
+                    )
 
-
-
-                case [Keyword.DRONE_COUNT, count]:
+                case [ZoneKey.START | ZoneKey.HUB | ZoneKey.END, config]:
+                    _parse_hub(
+                        line_nbr,
+                    )
 
                 case _:
                     raise ParseError(line_nbr, "Unknown syntax")
@@ -63,6 +89,6 @@ class MapParser:
             drones=drones,
             start=start,
             end=end,
-            zones=zones,
+            hubs=hubs,
             connections=connections,
         )
