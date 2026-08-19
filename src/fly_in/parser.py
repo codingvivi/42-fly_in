@@ -1,11 +1,10 @@
-from enum import StrEnum
 from collections.abc import Iterator
+from enum import StrEnum
 from pathlib import Path
 
-
 from .drones import Drone
-from .network import Connection, Network
 from .hub import Hub, Location, ZoneType
+from .network import Connection, Network
 
 
 class ParseError(Exception):
@@ -13,7 +12,7 @@ class ParseError(Exception):
         super().__init__(f"line{line_nbr}: {cause}")
 
 
-class ZoneKey(StrEnum):
+class Keyword(StrEnum):
     DRONE_COUNT = "nb_drones"
     START = "start_hub"
     HUB = "hub"
@@ -68,7 +67,7 @@ class MapParser:
             # match keywords and create values
             match [keyword, config_data.split()]:
                 #
-                case [ZoneKey.DRONE_COUNT, *count]:
+                case [Keyword.DRONE_COUNT, *count]:
                     if line_nbr != -1:
                         raise ParseError(
                             line_nbr, "Drone count needs to be on line 1"
@@ -77,7 +76,7 @@ class MapParser:
                         [Drone(id=int(drone_nr)) for drone_nr in count]
                     )
 
-                case [ZoneKey.START | ZoneKey.HUB | ZoneKey.END, config]:
+                case [Keyword.START | Keyword.HUB | Keyword.END, config]:
                     _parse_hub(
                         line_nbr,
                     )
