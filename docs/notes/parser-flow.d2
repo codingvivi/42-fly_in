@@ -1,0 +1,19 @@
+raw string -> string list -> more than one member?
+more than one member? -> has metadata?: yes
+more than one member? -> list to item: no 
+more than one member? {shape:diamond }
+list to item -> drones.turn into number -> drones.create drones
+has metadata? {shape:diamond }
+has metadata? -> two string lists: yes
+has metadata? -> zones.defs for zones: no
+
+ 
+two string lists -> zones.defs for zones: def list
+zones.defs for zones -> zones.hubs.create hub
+zones.defs for zones -> zones.conns.create connection
+
+two string lists -> str, str dict: metadata list
+str, str dict -> zones.hubs.turn into hub dict 
+zones.hubs.turn into hub dict -> zones.hubs.create hub 
+str, str dict -> zones.conns.turn into connection dict 
+zones.conns.turn into connection dict ->  zones.conns.create connection 
