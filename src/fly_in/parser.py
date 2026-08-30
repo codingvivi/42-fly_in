@@ -2,8 +2,10 @@ from collections.abc import Iterator
 from enum import StrEnum
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from .drones import Drone
-from .hub import Hub, Location, ZoneType
+from .hub import Hub, HubAttribute, Location
 from .network import Connection, Network
 
 
@@ -53,34 +55,72 @@ class MapParser:
         return set([Drone(id=int(drone_nr)) for drone_nr in count])
 
     @staticmethod
-    def _separate_metadata(
-        line_nbr: int, config: list
-    ) -> tuple[list, list] | list:
-        # find opening [
-        metadata_start = next(
-            (tok for tok in config if tok.startswith("[")), None
-        )
-        if not metadata_start:
-            return config
+    def _parse_zone_defs(
+        line_nbr: int, defs: tuple[str, ...]
+    ) -> tuple[str, Location]:
+        if len(defs) != 3:
+            raise ParseError(line_nbr, "required format: name x y")
 
-        metadata_end = config[-1]
-        if not metadata_end.endswith("]"):
+        id: str = defs[0]
+        if "-" in id:
+            raise ParseError(line_nbr, "'-' is not allowed in names")
+        location = Location(*(int(coord) for coord in defs[1:]))
+
+        return (id, location)
+
+    @staticmethod
+    def _split_metadata(
+        line_nbr: int, arg_string: str
+    ) -> tuple[tuple[str, ...], tuple[str, ...] | None]:
+        args_str_list: list[str] = arg_string.split("[")
+
+        defs_strs: tuple[str, ...] = tuple(args_str_list[0].split())
+
+        if len(args_str_list) == 1:
+            return (defs_strs, None)
+
+        meta_str: str = args_str_list[-1].strip()
+
+        if not meta_str.endswith("]"):
             raise ParseError(line_nbr, "Unterminated [")
 
-        split_index: int = config.index(metadata_start)
-        defs: list = config[:split_index]
-        metadata: list = config[split_index + 1 :]
+        meta_strs: tuple[str, ...] = tuple(meta_str.removesuffix("]").split())
 
-        return (defs, metadata)
+        return (defs_strs, meta_strs)
 
     @staticmethod
-    def _parse_metadata(
-        line_nrb: int, metadata: list[str]
-    ) -> dict[str, int | str | None]: ...
+    def tokenize_metadata(
+        line_nbr: int, meta_strs: tuple[str, ...]
+    ) -> dict[str, str]:
+        raw_metadata: dict[str, str] = {}
+
+        for string in meta_strs:
+            if "=" not in string:
+                raise ParseError(
+                    line_nbr, "required metadata format: key=value"
+                )
+            key, val = string.split("=", 1)
+            if key in raw_metadata:
+                raise ParseError(line_nbr, f"'{key}' specified more than once")
+            raw_metadata[key] = val
+
+        return raw_metadata
 
     @staticmethod
-    def _parse_zone(
-        line_nbr: int, defs: list, metadata: dict | None
+    def _parse_hub_metadata(
+        line_nbr: int, raw_metadata: dict[str, str]
+    ) -> HubAttribute:
+        try:
+            return HubAttribute.model_validate(raw_metadata)
+        except ValidationError as exc:
+            detail = "\n".join(
+                f"{error['loc'][0]}: {error['msg']}" for error in exc.errors()
+            )
+            raise ParseError(line_nbr, detail) from exc
+
+    @staticmethod
+    def _parse_hub(
+        line_nbr: int, raw_def_data: str, metadata: HubAttribute
     ) -> Hub: ...
 
     def parse_file(self) -> Network:
@@ -90,27 +130,37 @@ class MapParser:
         hubs: set[Hub]
         connections: set[Connection]
 
-        for line_nbr, raw_string in self._cleaned_data():
+        for line_nbr, line_string in self._cleaned_data():
             # split into keyword and rest
-            keyword, raw_string = raw_string.split(maxsplit=1)
+            keyword, args_string = line_string.split(maxsplit=1)
             if not keyword.endswith(":"):
                 raise ParseError(
                     line_nbr, 'Required format: "keyword: config"'
                 )
-            if not raw_string:
+            if not args_string:
                 raise ParseError(line_nbr, "Keyword needs an argument")
 
             keyword.strip(":")
-
-            data_strings: list[str] = raw_string.split()
 
             # match keywords and create values
             match keyword:
                 #
                 case Keyword.DRONE_COUNT:
-                    drones = self._parse_drones(line_nbr, data_strings)
+                    count: int = int(*args_string)
+                    drones = self._parse_drones(line_nbr, count)
                 case Keyword.START | Keyword.HUB | Keyword.END:
-                    hub = self._parse_hub(line_nbr, *self._parse_metadata())
+                    defs_str, meta_str = self._split_metadata(
+                        line_nbr, args_string
+                    )
+                    defs = self._parse_zone_defs(line_nbr, defs_str)
+                    # init with defaul vals
+                    meta = HubAttribute()
+                    # overwrite if metadata options found
+                    if meta_str is not None:
+                        raw_meta = self.tokenize_metadata(line_nbr, meta_str)
+                        meta = self._parse_hub_metadata(line_nbr, raw_meta)
+                    # write 1i
+                    hub = self._parse_hub(line_nbr, defs, meta)
                 case Keyword.CONNECTION:
                     conn = self._parse_connection(line_nbr, config_data)
                 case _:

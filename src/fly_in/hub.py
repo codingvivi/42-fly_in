@@ -1,6 +1,6 @@
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic.dataclasses import dataclass
 
 
@@ -32,9 +32,12 @@ class ZoneType(Enum):
         return self.value
 
 
-@dataclass(frozen=True)
 class HubAttribute(BaseModel):
-    type: ZoneType = ZoneType.NORMAL
+    model_config = ConfigDict(
+        frozen=True, extra="forbid", populate_by_name=True
+    )
+
+    type: ZoneType = Field(default=ZoneType.NORMAL, alias="zone")
     color: str | None = None
     max_drones: int = Field(default=1, ge=1)
 
