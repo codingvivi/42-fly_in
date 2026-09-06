@@ -16,7 +16,20 @@ class ParseError(Exception):
         super().__init__(f"{where}: {cause}")
 
 
-def _describe(exc: ValidationError) -> str:
+class Keyword(StrEnum):
+    DRONE_COUNT = "nb_drones"
+    START = "start_hub"
+    HUB = "hub"
+    END = "end_hub"
+    CONNECTION = "connection"
+
+
+# ~~~~~ Text helpers ~~~~~
+# ripped out since parser was growing big,
+# and since they arent really about operating on class specific data
+
+
+def _describe(exception: ValidationError) -> str:
     """Render pydantic's failures as "field: message" lines.
 
     Each error's "loc" locates the offending field, and is empty for a
@@ -25,18 +38,84 @@ def _describe(exc: ValidationError) -> str:
     the map file actually uses.
     """
     details: list[str] = []
-    for error in exc.errors():
+    for error in exception.errors():
         loc = ".".join(str(part) for part in error["loc"])
         details.append(f"{loc or 'metadata'}: {error['msg']}")
     return "\n".join(details)
 
 
-class Keyword(StrEnum):
-    DRONE_COUNT = "nb_drones"
-    START = "start_hub"
-    HUB = "hub"
-    END = "end_hub"
-    CONNECTION = "connection"
+def _split_metadata(
+    line_nbr: int, arg_string: str
+) -> tuple[tuple[str, ...], tuple[str, ...] | None]:
+    # split by metadata delim, if it exists
+    args_str_list: list[str] = arg_string.split("[")
+
+    # get positional args
+    defs_strs: tuple[str, ...] = tuple(args_str_list[0].split())
+
+    # return if no named
+    if len(args_str_list) == 1:
+        return (defs_strs, None)
+
+    # get nameds
+    meta_str: str = args_str_list[-1].strip()
+
+    # check for correct syntax
+    if not meta_str.endswith("]"):
+        raise ParseError(line_nbr, "Unterminated [")
+
+    # break down by whitespaces
+    meta_strs: tuple[str, ...] = tuple(meta_str.removesuffix("]").split())
+
+    return (defs_strs, meta_strs)
+
+
+def _tokenize_metadata(
+    line_nbr: int, meta_strs: tuple[str, ...]
+) -> dict[str, str]:
+    raw_metadata: dict[str, str] = {}
+
+    for string in meta_strs:
+        if "=" not in string:
+            raise ParseError(line_nbr, "required metadata format: key=value")
+
+        key, val = string.split("=", 1)
+
+        if key in raw_metadata:
+            raise ParseError(line_nbr, f"'{key}' specified more than once")
+        raw_metadata[key] = val
+
+    return raw_metadata
+
+
+# ~~~~~ Zone helpers ~~~~~
+def _parse_zone_defs(
+    line_nbr: int, defs: tuple[str, ...]
+) -> tuple[str, Location]:
+    if len(defs) != 3:
+        raise ParseError(line_nbr, "required format: name x y")
+
+    name: str = defs[0]
+    if "-" in name:
+        raise ParseError(line_nbr, "'-' is not allowed in names")
+    try:
+        # slice off name, spread into Location
+        location = Location(*(int(coord) for coord in defs[1:]))
+    except ValueError as exc:
+        raise ParseError(line_nbr, "coordinates must be integers") from exc
+
+    return (name, location)
+
+
+def _parse_zone_metadata(
+    line_nbr: int, raw_metadata: dict[str, str]
+) -> ZoneAttribute:
+    try:
+        # pydantic does all the type coercion
+        return ZoneAttribute.model_validate(raw_metadata)
+    except ValidationError as exc:
+        # make newline seprated string with all errors
+        raise ParseError(line_nbr, _describe(exc)) from exc
 
 
 class MapParser:
@@ -48,8 +127,8 @@ class MapParser:
     and one end. Those checks need the zones and connections seen so far,
     which is the state this object accumulates while parsing.
 
-    Helpers that only transform one line's text stay static -- they need
-    none of that state.
+    Every method here touches that state; the text helpers above do not,
+    which is why they are module-level functions rather than methods.
     """
 
     def __init__(self, path: Path) -> None:
@@ -69,7 +148,6 @@ class MapParser:
         self._start = None
         self._end = None
 
-    # ~~~~~ Helper functions ~~~~~
     def _cleaned_data(self) -> Iterator[tuple[int, str]]:
         with open(self._path) as mapfile:
             file_data = mapfile.readlines()
@@ -83,82 +161,6 @@ class MapParser:
                     continue
 
                 yield line_nbr, clean_data
-
-    @staticmethod
-    def _split_metadata(
-        line_nbr: int, arg_string: str
-    ) -> tuple[tuple[str, ...], tuple[str, ...] | None]:
-        # split by metadata delim, if it exists
-        args_str_list: list[str] = arg_string.split("[")
-
-        # get positional args
-        defs_strs: tuple[str, ...] = tuple(args_str_list[0].split())
-
-        # return if no named
-        if len(args_str_list) == 1:
-            return (defs_strs, None)
-
-        # get nameds
-        meta_str: str = args_str_list[-1].strip()
-
-        # check for correct syntax
-        if not meta_str.endswith("]"):
-            raise ParseError(line_nbr, "Unterminated [")
-
-        # break down by whitespaces
-        meta_strs: tuple[str, ...] = tuple(meta_str.removesuffix("]").split())
-
-        return (defs_strs, meta_strs)
-
-    @staticmethod
-    def tokenize_metadata(
-        line_nbr: int, meta_strs: tuple[str, ...]
-    ) -> dict[str, str]:
-        raw_metadata: dict[str, str] = {}
-
-        for string in meta_strs:
-            if "=" not in string:
-                raise ParseError(
-                    line_nbr, "required metadata format: key=value"
-                )
-
-            key, val = string.split("=", 1)
-
-            if key in raw_metadata:
-                raise ParseError(line_nbr, f"'{key}' specified more than once")
-            raw_metadata[key] = val
-
-        return raw_metadata
-
-    # ~~~~~ Zone helpers ~~~~~
-    @staticmethod
-    def _parse_zone_defs(
-        line_nbr: int, defs: tuple[str, ...]
-    ) -> tuple[str, Location]:
-        if len(defs) != 3:
-            raise ParseError(line_nbr, "required format: name x y")
-
-        id: str = defs[0]
-        if "-" in id:
-            raise ParseError(line_nbr, "'-' is not allowed in names")
-        try:
-            # slice off name, spread into Location
-            location = Location(*(int(coord) for coord in defs[1:]))
-        except ValueError as exc:
-            raise ParseError(line_nbr, "coordinates must be integers") from exc
-
-        return (id, location)
-
-    @staticmethod
-    def _parse_zone_metadata(
-        line_nbr: int, raw_metadata: dict[str, str]
-    ) -> ZoneAttribute:
-        try:
-            # pydantic does all the type coercion
-            return ZoneAttribute.model_validate(raw_metadata)
-        except ValidationError as exc:
-            # make newline seprated string with all errors
-            raise ParseError(line_nbr, _describe(exc)) from exc
 
     def _parse_drones(self, line_nbr: int, args_string: str) -> None:
         if self._drones:
@@ -178,14 +180,14 @@ class MapParser:
     def _parse_zone(
         self, line_nbr: int, keyword: Keyword, args_string: str
     ) -> None:
-        defs_str, meta_str = self._split_metadata(line_nbr, args_string)
-        name, coordinates = self._parse_zone_defs(line_nbr, defs_str)
+        defs_str, meta_str = _split_metadata(line_nbr, args_string)
+        name, coordinates = _parse_zone_defs(line_nbr, defs_str)
 
         # init with default vals, overwrite if metadata options found
         attributes = ZoneAttribute()
         if meta_str is not None:
-            raw_meta = self.tokenize_metadata(line_nbr, meta_str)
-            attributes = self._parse_zone_metadata(line_nbr, raw_meta)
+            raw_meta = _tokenize_metadata(line_nbr, meta_str)
+            attributes = _parse_zone_metadata(line_nbr, raw_meta)
 
         if name in self._zones:
             raise ParseError(line_nbr, f"duplicate zone name {name!r}")
@@ -204,7 +206,7 @@ class MapParser:
             self._end = zone
 
     def _parse_connection(self, line_nbr: int, args_string: str) -> None:
-        defs_str, meta_str = self._split_metadata(line_nbr, args_string)
+        defs_str, meta_str = _split_metadata(line_nbr, args_string)
 
         if len(defs_str) != 1:
             raise ParseError(line_nbr, "required format: zone1-zone2")
@@ -228,9 +230,7 @@ class MapParser:
             raise ParseError(line_nbr, "a zone cannot connect to itself")
 
         raw_meta = (
-            {}
-            if meta_str is None
-            else self.tokenize_metadata(line_nbr, meta_str)
+            {} if meta_str is None else _tokenize_metadata(line_nbr, meta_str)
         )
         # validate through an adapter so the max_link_capacity alias, the
         # str->int coercion and extra="forbid" all apply to file metadata
