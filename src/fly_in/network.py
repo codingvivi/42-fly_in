@@ -1,34 +1,22 @@
-from pydantic import Field
+from pydantic import ConfigDict
 from pydantic.dataclasses import dataclass
 
+from .connection import Connection
 from .drones import Drone
-from .hub import Hub
+from .occupiable import Occupiable
+from .zone import Zone
 
 
-@dataclass(frozen=True)
-class Connection:
-    name: str
-    hubs: frozenset[Hub] = Field(min_length=2, max_length=2)
-    max_drones: int = Field(
-        default=1, ge=1, validation_alias="max_link_capacity"
-    )
-
-    def connected_to(self, hub: Hub) -> Hub:
-        if hub not in self.hubs:
-            raise KeyError(f"{hub.name!r} not in this connection")
-        # (element,) unpacks one element iterable
-        # should complain if more than one member
-        (other,) = self.hubs - {hub}
-        return other
-
-
-@dataclass
+# Occupiable is an ABC,
+# so pydantic cannot derive a schema for it.
+# Validate occupancy values by isinstance instead
+@dataclass(config=ConfigDict(arbitrary_types_allowed=True))
 class Network:
     drones: frozenset[Drone]
-    start: Hub
-    end: Hub
-    hubs: frozenset[Hub]
+    start: Zone
+    end: Zone
+    zones: frozenset[Zone]
     connections: frozenset[Connection]
-    occupancy: dict[Drone, Hub | Connection]
+    occupancy: dict[Drone, Occupiable]
 
     def link(self) -> None: ...

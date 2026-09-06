@@ -3,8 +3,10 @@ from enum import Enum
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.dataclasses import dataclass
 
+from .occupiable import Capacity, Occupiable
 
-@dataclass
+
+@dataclass(frozen=True)
 class Location:
     x: int
     y: int
@@ -32,18 +34,22 @@ class ZoneType(Enum):
         return self.value
 
 
-class HubAttribute(BaseModel):
+class ZoneAttribute(BaseModel):
     model_config = ConfigDict(
         frozen=True, extra="forbid", populate_by_name=True
     )
 
     type: ZoneType = Field(default=ZoneType.NORMAL, alias="zone")
     color: str | None = None
-    max_drones: int = Field(default=1, ge=1)
+    max_drones: Capacity = 1
 
 
 @dataclass(frozen=True)
-class Hub:
+class Zone(Occupiable):
     name: str
     coordinates: Location
-    attributes: HubAttribute
+    attributes: ZoneAttribute
+
+    @property
+    def capacity(self) -> Capacity:
+        return self.attributes.max_drones
