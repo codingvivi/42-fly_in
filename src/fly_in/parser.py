@@ -4,10 +4,7 @@ from pathlib import Path
 
 from pydantic import TypeAdapter, ValidationError
 
-from .connection import Connection
-from .drones import Drone
-from .network import Network
-from .zone import Location, Zone, ZoneAttribute
+from .model import Connection, Drone, Location, Network, Zone, ZoneAttribute
 
 _CONNECTION = TypeAdapter(Connection)
 
