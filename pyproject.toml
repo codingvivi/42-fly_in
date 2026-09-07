@@ -3,10 +3,10 @@ name = "fly-in"
 version = "1.0.0"
 description = "Multi-drone routing simulator"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = ["pydantic"]
 
 [dependency-groups]
-dev = ["mypy", "pytest", "flake8", "ruff", "pydantic"]
+dev = ["mypy", "pytest", "flake8", "ruff"]
 
 [build-system]
 requires = ["hatchling"]

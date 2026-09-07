@@ -118,23 +118,25 @@ wheels = [
 name = "fly-in"
 version = "1.0.0"
 source = { editable = "." }
+dependencies = [
+    { name = "pydantic" },
+]
 
 [package.dev-dependencies]
 dev = [
     { name = "flake8" },
     { name = "mypy" },
-    { name = "pydantic" },
     { name = "pytest" },
     { name = "ruff" },
 ]
 
 [package.metadata]
+requires-dist = [{ name = "pydantic" }]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "flake8" },
     { name = "mypy" },
-    { name = "pydantic" },
     { name = "pytest" },
     { name = "ruff" },
 ]
