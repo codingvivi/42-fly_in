@@ -1,4 +1,6 @@
-from pydantic import ConfigDict
+from typing import Self
+
+from pydantic import ConfigDict, model_validator
 from pydantic.dataclasses import dataclass
 
 from .connection import Connection
@@ -20,3 +22,15 @@ class Network:
     occupancy: dict[Drone, Occupiable]
 
     def link(self) -> None: ...
+
+    @model_validator(mode="after")
+    def _every_zone_is_connected(self) -> Self:
+
+        # for _ in self.connections:
+        #     for z in c.zones:
+        linked: set[Zone] = {z for c in self.connections for z in c.zones}
+        orphans: list[str] = sorted(z.name for z in self.zones - linked)
+        if orphans:
+            raise ValueError(f"unconnected zone(s): {', '.join(orphans)}")
+
+        return self

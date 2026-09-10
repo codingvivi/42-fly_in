@@ -33,14 +33,18 @@ def _describe(exception: ValidationError) -> str:
     """Render pydantic's failures as "field: message" lines.
 
     Each error's "loc" locates the offending field, and is empty for a
-    whole-model fault, so fall back to a label rather than indexing into
-    an empty tuple. Aliased fields report their alias, which is the name
-    the map file actually uses.
+    whole-model fault raised by a model_validator; those get the bare
+    message, since there is no field to name. Aliased fields report their
+    alias, which is the name the map file actually uses.
+
+    Pydantic prefixes messages from a raised ValueError with "Value
+    error, ", which says nothing the reader needs, so it is stripped.
     """
     details: list[str] = []
     for error in exception.errors():
         loc = ".".join(str(part) for part in error["loc"])
-        details.append(f"{loc or 'metadata'}: {error['msg']}")
+        msg = error["msg"].removeprefix("Value error, ")
+        details.append(f"{loc}: {msg}" if loc else msg)
     return "\n".join(details)
 
 
@@ -285,12 +289,17 @@ class MapParser:
         if self._end is None:
             raise ParseError(None, "no end_hub defined")
 
-        return Network(
-            drones=self._drones,
-            start=self._start,
-            end=self._end,
-            zones=frozenset(self._zones.values()),
-            connections=frozenset(self._connections.values()),
-            # all drones begin in the start zone
-            occupancy={drone: self._start for drone in self._drones},
-        )
+        # Network's model_validators enforce whole-graph rules; surface
+        # their failures as ParseError like every other map fault
+        try:
+            return Network(
+                drones=self._drones,
+                start=self._start,
+                end=self._end,
+                zones=frozenset(self._zones.values()),
+                connections=frozenset(self._connections.values()),
+                # all drones begin in the start zone
+                occupancy={drone: self._start for drone in self._drones},
+            )
+        except ValidationError as exc:
+            raise ParseError(None, _describe(exc)) from exc

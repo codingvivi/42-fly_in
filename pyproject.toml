@@ -21,3 +21,8 @@ select = ["E", "W", "F", "I", "UP", "B", "SIM"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/fly_in"]
+
+[tool.pytest.ini_options]
+# pathing for tests 
+pythonpath = ["test"]
+addopts = "--strict-markers"

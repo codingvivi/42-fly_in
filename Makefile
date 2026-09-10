@@ -73,7 +73,7 @@ lint-strict: flake8 mypy-strict
 lint-all: ruff flake8 mypy-strict
 
 test:
-	uv run pytest
+	uv run pytest -v
 
 test-turnin: lint-strict test
 
