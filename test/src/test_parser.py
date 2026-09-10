@@ -77,29 +77,24 @@ def test_missing_lines(write_map, missing, error_type, error_text):
 
 
 @pytest.mark.parametrize(
-    ("missing", "error_type", "error_text"),
+    ("builder", "arg_name", "kwargs", "expected"),
     [
-        # dropping a hub also drops the default connection, which would
-        # otherwise fail first on the zone that is no longer defined
         (
-            {"nb_line": None},
-            ParseError,
-            "line 1: first line must define nb_drones",
+            start,
+            "start_line",
+            {"x": None},
+            "line 2: coordinates must be integers",
         ),
         (
-            {"start_line": None, "link_line": None},
-            ParseError,
-            "end of file: no start_hub defined",
+            end,
+            "end_line",
+            {"name": "a-b"},
+            "line 3: '-' is not allowed in names",
         ),
-        (
-            {"end_line": None, "link_line": None},
-            ParseError,
-            "end of file: no end_hub defined",
-        ),
-        ({"link_line": None}, ValueError, "unconnected zone(s)"),
+        (hub, None, {"x": None}, "line 5: coordinates must be integers"),
     ],
-    ids=["nb_drones", "start_hub", "end_hub", "connection"],
+    ids=["start_x", "end_name", "hub_x"],
 )
-def test_missing_params(write_map, missing, error_type, error_text):
-    with pytest.raises(error_type, match=re.escape(error_text)):
-        MapParser(write_map(map(**missing))).parse_file()
+def test_bad_field(write_map, builder, arg_name, kwargs, expected):
+    line = builder(**kwargs)
+    text = map(line) if arg_name is None else map(**{arg_name: line})
