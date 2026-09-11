@@ -7,18 +7,19 @@ from .zone import Zone
 
 @dataclass(
     frozen=True,
-    config=ConfigDict(extra="forbid", populate_by_name=True),
+    config=ConfigDict(extra="forbid"),
 )
 class Connection(Occupiable):
     name: str
     zones: frozenset[Zone] = Field(min_length=2, max_length=2)
-    max_drones: Capacity = Field(
-        default=1, validation_alias="max_link_capacity"
-    )
+    # can't alias cuz alias needs populate_by_name,
+    # which would also accept the field's own name,
+    # letting a connection take the zone-only 'max_drones'
+    max_link_capacity: Capacity = 1
 
     @property
     def capacity(self) -> Capacity:
-        return self.max_drones
+        return self.max_link_capacity
 
     def connected_to(self, zone: Zone) -> Zone:
         if zone not in self.zones:
