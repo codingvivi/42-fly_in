@@ -1,9 +1,12 @@
+import sys
 from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.dataclasses import dataclass
 
 from .occupiable import Capacity, Occupiable
+
+UNLIMITED: Capacity = sys.maxsize
 
 
 @dataclass(frozen=True)
@@ -53,3 +56,12 @@ class Zone(Occupiable):
     @property
     def capacity(self) -> Capacity:
         return self.attributes.max_drones
+
+
+@dataclass(frozen=True)
+class TerminalZone(Zone):
+    """A start or end zone. §VII.4: its declared max_drones is ignored."""
+
+    @property
+    def capacity(self) -> Capacity:
+        return UNLIMITED

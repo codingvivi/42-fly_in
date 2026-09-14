@@ -15,15 +15,24 @@ from .connection import Connection
 from .drones import Drone
 from .network import Network
 from .occupiable import Capacity, Occupiable
-from .zone import Location, Zone, ZoneAttribute, ZoneType
+from .zone import (
+    UNLIMITED,
+    Location,
+    TerminalZone,
+    Zone,
+    ZoneAttribute,
+    ZoneType,
+)
 
 __all__ = [
+    "UNLIMITED",
     "Capacity",
     "Connection",
     "Drone",
     "Location",
     "Network",
     "Occupiable",
+    "TerminalZone",
     "Zone",
     "ZoneAttribute",
     "ZoneType",

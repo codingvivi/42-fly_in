@@ -4,7 +4,15 @@ from pathlib import Path
 
 from pydantic import TypeAdapter, ValidationError
 
-from .model import Connection, Drone, Location, Network, Zone, ZoneAttribute
+from .model import (
+    Connection,
+    Drone,
+    Location,
+    Network,
+    TerminalZone,
+    Zone,
+    ZoneAttribute,
+)
 
 _CONNECTION = TypeAdapter(Connection)
 
@@ -201,7 +209,13 @@ class MapParser:
         if keyword is Keyword.END and self._end is not None:
             raise ParseError(line_nbr, "more than one end_hub")
 
-        zone = Zone(name=name, coordinates=coordinates, attributes=attributes)
+        # start and end are uncapped per VII.4, which TerminalZone encodes
+        # by overriding capacity; their declared max_drones is still kept
+        # on .attributes, just not reported
+        zone_class = Zone if keyword is Keyword.HUB else TerminalZone
+        zone = zone_class(
+            name=name, coordinates=coordinates, attributes=attributes
+        )
         self._zones[name] = zone
 
         if keyword is Keyword.START:

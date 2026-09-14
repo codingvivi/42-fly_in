@@ -22,6 +22,37 @@ an identifier -- and those are cases the parser has to reject:
 Sequence[str] and would silently render one character per fragment.
 """
 
+from collections.abc import Callable
+from pathlib import Path
+
+import pytest
+from _pytest.mark.structures import ParameterSet
+
+# shared by the test modules: what write_map hands back, and the shape the
+# line builders have in common (their signatures differ, the return does not)
+WriteMap = Callable[[str], Path]
+LineBuilder = Callable[..., str]
+
+# one case for a parametrized test: the argument values, then the id last.
+# a ready-made pytest.param is also allowed, for rows that need marks.
+Row = tuple[object, ...] | ParameterSet
+
+
+def params(rows: list[Row]) -> list[ParameterSet]:
+    """Turn (value, ..., id) rows into params; pass ParameterSets through.
+
+    Keeps the case tables to one line per case, with the id on the row it
+    names rather than in a parallel `ids=` list that can fall out of step.
+    """
+    return [
+        row
+        if isinstance(row, ParameterSet)
+        # unpack everything but last as content
+        # last becomes id
+        else pytest.param(*row[:-1], id=str(row[-1]))
+        for row in rows
+    ]
+
 
 def _named_args(meta: list[str] | None) -> str:
     """Wrap fragments as ' [k=v k=v]', or '' when there are none."""
