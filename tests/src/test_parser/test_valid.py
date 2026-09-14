@@ -10,6 +10,7 @@ import pytest
 from helpers import (
     Row,
     WriteMap,
+    color,
     end,
     hub,
     link,
@@ -18,11 +19,12 @@ from helpers import (
     nb_drones,
     params,
     start,
+    zone,
 )
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from fly_in.model import Zone
+from fly_in.model import Zone, ZoneType
 from fly_in.parser import MapParser
 
 FLEET = 5
@@ -44,23 +46,56 @@ def check_zone_in_set(zones: frozenset[Zone], name: str) -> Zone:
     return index[name]
 
 
-# a name the parser accepts: '-' separates connections, '#' opens a
-# comment, '[' and ']' delimit metadata, '=' is metadata syntax, and
-# whitespace breaks the `name x y` arity. Cs/Cc/Zs drop surrogates,
-# control characters and exotic spaces, which break the line format.
+# `.split() == [s]` mirrors what the parser does: a zone line is split on
+# whitespace and must yield exactly `name x y`, so any string that splits
+# into more than one piece cannot be a name. Doing it this way also
+# covers U+00A0 and U+2028, which a category blacklist would miss.
+def _unsplittable(value: str) -> bool:
+    return value.split() == [value]
+
+
 zone_names = st.text(
     alphabet=st.characters(
-        blacklist_characters="-#[]= \t\n\r",
-        blacklist_categories=("Cs", "Cc", "Zs"),
+        # '-' separates connection endpoints, '#' opens a comment,
+        # '[' starts the metadata block, surrogates cannot be encoded
+        blacklist_characters="-#[",
+        blacklist_categories=["Cs"],
     ),
     min_size=1,
     max_size=20,
-).filter(lambda s: s.strip() == s and s not in {"start", "end"})
+).filter(_unsplittable)
+
+# a metadata value is a freer grammar than a name: '-', '=' and even ']'
+# all survive, because _split_metadata only strips the final ']'
+metadata_values = st.text(
+    alphabet=st.characters(
+        blacklist_characters="#[",
+        blacklist_categories=["Cs"],
+    ),
+    min_size=1,
+    max_size=20,
+).filter(_unsplittable)
+
+
+def _map_around(name: str, x: object, y: object, capacity: object) -> str:
+    """A three-zone map whose middle hub is `name`.
+    used to avoid name collsion if user choses to name a hub start or end.
+    """
+    start_name, end_name = f"{name}_start", f"{name}_end"
+    return map(
+        hub(name, x, y, meta=[max_drones(capacity)]),
+        link(start_name, name),
+        link(name, end_name),
+        start_line=start(start_name),
+        end_line=end(end_name),
+        link_line=None,
+    )
+
 
 # a cap of 1 is below the fleet size, so an honoured cap would show up
 TERMINAL_CAPACITY: list[Row] = [
-    ({"start_line": start(meta=[max_drones(1)])}, "start", "start_hub"),
-    ({"end_line": end(meta=[max_drones(1)])}, "end", "end_hub"),
+    ({"start_line": start(meta=[max_drones(42)])}, "start", "start_hub"),
+    ({"end_line": end(meta=[max_drones(42)])}, "end", "end_hub"),
 ]
 
 
@@ -74,7 +109,7 @@ def test_terminal_capacity_ignored(
     terminal = check_zone_in_set(network.zones, zone_name)
 
     # declared value is still on the attributes
-    assert terminal.attributes.max_drones == 1
+    assert terminal.attributes.max_drones == 42
     # whole fleet has to fit regardless
     assert terminal.capacity >= FLEET
     assert len(network.drones) == FLEET
@@ -92,52 +127,107 @@ def test_terminal_capacity_ignored(
     y=st.integers(),
     capacity=st.integers(min_value=1),
 )
-def test_zone_values_round_trip(
+def test_zone_def_round_trip(
     write_map: WriteMap, name: str, x: int, y: int, capacity: int
 ) -> None:
     """Whatever a hub line declares is what the Zone reports back."""
 
-    map_txt = map(
-        hub(name, x, y, meta=[max_drones(capacity)]), link("start", name)
-    )
-
+    map_txt = _map_around(name, x, y, capacity)
     network = MapParser(write_map(map_txt)).parse_file()
 
     parsed = check_zone_in_set(network.zones, name)
+    # as per the _map_around defaults
+    assert network.start.name == name + "_start"
+    assert network.end.name == name + "_end"
 
     assert parsed.coordinates.x == x
     assert parsed.coordinates.y == y
     assert parsed.capacity == capacity
 
 
-# @pytest.mark.parametrize(
-#     ("map_args", "value", "target"), params(VALUE_TESTS)
-# )
-# def test_occupiable_vals(write_map, map_args, value, target) -> None:
+@pytest.mark.parametrize("zone_type", ZoneType)
+def test_zone_meta_round_trip(
+    write_map: WriteMap, zone_type: ZoneType
+) -> None:
+    """Whatever a hub line declares is what the Zone reports back."""
 
-#     network = MapParser(write_map(map(map_args))).parse_file()
+    # connections use zone *names* ("start"), not the file keywords
+    # ("start_hub:"); the builders' defaults are start / end / testhub
+    map_txt = map(
+        hub(meta=[zone(zone_type)]),
+        link("start", "testhub"),
+        link("testhub", "end"),
+        start_line=start(meta=[zone(zone_type)]),
+        end_line=end(meta=[zone(zone_type)]),
+        link_line=None,
+    )
+    network = MapParser(write_map(map_txt)).parse_file()
 
-#     assert network.value == target
-# cc
-
-# # pdf does not list blocked as invalid
-# # thus it should parse and shown as no solution
-# BLOCKED_TERMINALS: list[Row] = [
-#     ({"start_line": start(meta=[zone("blocked")])}, "start", "start_hub"),
-#     ({"end_line": end(meta=[zone("blocked")])}, "end", "end_hub"),
-# ]
+    parsed = check_zone_in_set(network.zones, "testhub")
+    assert parsed.attributes.type == zone_type
+    assert network.start.attributes.type == zone_type
+    assert network.end.attributes.type == zone_type
 
 
-# @pytest.mark.parametrize(
-#     ("map_args", "zone_name"), params(BLOCKED_TERMINALS)
-# )
-# def test_blocked_terminal_parses(
-#     write_map: WriteMap, map_args: dict[str, str], zone_name: str
-# ) -> None:
-#     """A blocked start or end is not a parse error, just unsolvable."""
-#     network = MapParser(write_map(map(**map_args))).parse_file()
-#     terminal = find_zone(network.zones, zone_name)
+@settings(
+    max_examples=200,
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
+)
+@given(value=metadata_values)
+def test_color_round_trips(write_map: WriteMap, value: str) -> None:
+    """color is stored verbatim: the parser gives it no meaning at all.
 
-#     # recorded as declared, not quietly sanitised to normal
-#     assert str(terminal.attributes.type) == "blocked"
-#     assert terminal.attributes.type.is_passable is False
+    Page 11: "any valid single-word strings ... There is no fixed list",
+    so survival is the whole contract -> property rather than a table
+    of named colors.
+    """
+    # connections use zone *names* ("start"), not the file keywords
+    # ("start_hub:"); the builders' defaults are start / end / testhub
+    map_txt = map(
+        hub(meta=[color(value)]),
+        link("start", "testhub"),
+        link("testhub", "end"),
+        start_line=start(meta=[color(value)]),
+        end_line=end(meta=[color(value)]),
+        link_line=None,
+    )
+    network = MapParser(write_map(map_txt)).parse_file()
+
+    parsed = check_zone_in_set(network.zones, "testhub")
+    assert parsed.attributes.color == value
+    assert network.start.attributes.color == value
+    assert network.end.attributes.color == value
+
+
+def test_color_defaults_to_none(write_map: WriteMap) -> None:
+    """Page 11: color is optional, "default: none"."""
+    map_txt = map(
+        hub(),
+        link("start", "testhub"),
+        link("testhub", "end"),
+        link_line=None,
+    )
+    network = MapParser(write_map(map_txt)).parse_file()
+
+    assert check_zone_in_set(network.zones, "testhub").attributes.color is None
+    assert network.start.attributes.color is None
+    assert network.end.attributes.color is None
+
+
+@settings(
+    max_examples=500,
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
+)
+@given(capacity=st.integers(min_value=1))
+def test_max_drone_round_trips(write_map: WriteMap, capacity: int):
+
+    map_txt = map(
+        hub(meta=[max_drones(capacity)]),
+        link("start", "testhub"),
+        link("testhub", "end"),
+        link_line=None,
+    )
+    network = MapParser(write_map(map_txt)).parse_file()
+    parsed = check_zone_in_set(network.zones, "testhub")
+
+    assert parsed.attributes.max_drones == capacity
