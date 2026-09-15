@@ -146,22 +146,49 @@ def test_zone_def_round_trip(
 
 
 # ~~~~~ metadata: zone type ~~~~~
-@pytest.mark.parametrize("zone_type", ZoneType)
+# Written out manually, so enum matches
+ZONE_SEMANTICS: list[Row] = [
+    (ZoneType.NORMAL, 1, True, False, "normal"),
+    (ZoneType.PRIORITY, 1, True, True, "priority"),
+    (ZoneType.RESTRICTED, 2, True, False, "restricted"),
+    (ZoneType.BLOCKED, 1, False, False, "blocked"),
+]
+
+
+def test_zone_semantics_cover_the_enum() -> None:
+    """A new ZoneType must not slip past the table above."""
+    assert {row[0] for row in ZONE_SEMANTICS} == set(ZoneType)
+
+
+@pytest.mark.parametrize(
+    ("target_type", "cost", "passable", "preferred"), params(ZONE_SEMANTICS)
+)
 def test_zone_meta_round_trip(
-    write_map: WriteMap, zone_type: ZoneType
+    write_map: WriteMap,
+    target_type: ZoneType,
+    cost: int,
+    passable: bool,
+    preferred: bool,
 ) -> None:
     """Every ZoneType is stored as declared, terminals included."""
     map_txt = _chain(
-        hub(meta=[zone(zone_type)]),
-        start_line=start(meta=[zone(zone_type)]),
-        end_line=end(meta=[zone(zone_type)]),
+        hub(meta=[zone(target_type)]),
+        start_line=start(meta=[zone(target_type)]),
+        end_line=end(meta=[zone(target_type)]),
     )
     network = MapParser(write_map(map_txt)).parse_file()
 
-    parsed = check_zone_in_set(network.zones, "testhub")
-    assert parsed.attributes.type == zone_type
-    assert network.start.attributes.type == zone_type
-    assert network.end.attributes.type == zone_type
+    to_check = {
+        "hub": check_zone_in_set(network.zones, "testhub"),
+        "start": network.start,
+        "end": network.end,
+    }
+    for label, checked in to_check.items():
+        actual = checked.attributes.type
+        assert actual == target_type, f"{label} is {actual}"
+        assert actual.cost == cost, f"{label} cost {actual.cost}"
+        assert actual.is_passable is passable
+        assert actual.is_preferred is preferred
 
 
 # ~~~~~ metadata: color ~~~~~
