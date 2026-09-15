@@ -1,10 +1,4 @@
-"""Metadata the parser must accept, and what it stores when it does.
-
-Every test here is a round trip: a value written into a map line has to
-come back off the parsed Zone unchanged. The one exception is §VII.4's
-stated rule that `max_drones` is *ignored* on `start_hub`/`end_hub` --
-accepted, kept on .attributes, but not reported by .capacity.
-"""
+"""Tests checking if data is parsed CORRECTLY by the parser"""
 
 import pytest
 from helpers import (
@@ -26,7 +20,7 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from fly_in.model import Connection, Zone, ZoneType
-from fly_in.parser import MapParser
+from fly_in.parser import MapParser, ParseError
 
 
 # ~~~~~ lookup helpers ~~~~~
@@ -166,9 +160,9 @@ def test_zone_semantics_cover_the_enum() -> None:
 def test_zone_meta_round_trip(
     write_map: WriteMap,
     target_type: ZoneType,
-    cost: int,
-    passable: bool,
-    preferred: bool,
+    target_cost: int,
+    target_passable: bool,
+    target_preferred: bool,
 ) -> None:
     """Every ZoneType is stored as declared, terminals included."""
     map_txt = _chain(
@@ -186,9 +180,9 @@ def test_zone_meta_round_trip(
     for label, checked in to_check.items():
         actual = checked.attributes.type
         assert actual == target_type, f"{label} is {actual}"
-        assert actual.cost == cost, f"{label} cost {actual.cost}"
-        assert actual.is_passable is passable
-        assert actual.is_preferred is preferred
+        assert actual.cost == target_cost, f"{label} cost {actual.cost}"
+        assert actual.is_passable is target_passable
+        assert actual.is_preferred is target_preferred
 
 
 # ~~~~~ metadata: color ~~~~~
@@ -295,3 +289,21 @@ def test_link_capacity_defaults_to_one(write_map: WriteMap) -> None:
 
     for name in ("start-testhub", "testhub-end"):
         assert check_conn_in_set(network.connections, name).capacity == 1
+
+
+def test_line_numbers_count_comments_and_blanks(write_map: WriteMap) -> None:
+    """Errors name the line as the user's editor counts it."""
+    text = "".join(
+        f"{ln}\n"
+        for ln in [
+            "# header",
+            "",
+            "# another",
+            nb_drones(2),
+            start(),
+            end(),
+            hub("a-b"),  # raw line 7
+        ]
+    )
+    with pytest.raises(ParseError, match="line 7: '-' is not allowed"):
+        MapParser(write_map(text)).parse_file()
