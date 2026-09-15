@@ -155,7 +155,8 @@ def test_zone_semantics_cover_the_enum() -> None:
 
 
 @pytest.mark.parametrize(
-    ("target_type", "cost", "passable", "preferred"), params(ZONE_SEMANTICS)
+    ("target_type", "target_cost", "target_passable", "target_preferred"),
+    params(ZONE_SEMANTICS),
 )
 def test_zone_meta_round_trip(
     write_map: WriteMap,
@@ -235,10 +236,15 @@ def test_max_drone_round_trips(write_map: WriteMap, capacity: int) -> None:
 
 
 FLEET = 5
+DECLARED_CAP = 2
 
 TERMINAL_CAPACITY: list[Row] = [
-    ({"start_line": start(meta=[max_drones(42)])}, "start", "start_hub"),
-    ({"end_line": end(meta=[max_drones(42)])}, "end", "end_hub"),
+    (
+        {"start_line": start(meta=[max_drones(DECLARED_CAP)])},
+        "start",
+        "start_hub",
+    ),
+    ({"end_line": end(meta=[max_drones(DECLARED_CAP)])}, "end", "end_hub"),
 ]
 
 
@@ -252,7 +258,7 @@ def test_terminal_capacity_ignored(
     terminal = check_zone_in_set(network.zones, zone_name)
 
     # declared value is still on the attributes
-    assert terminal.attributes.max_drones == 42
+    assert terminal.attributes.max_drones == DECLARED_CAP
     # whole fleet has to fit regardless
     assert terminal.capacity >= FLEET
     assert len(network.drones) == FLEET
