@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Iterator
 from enum import StrEnum
 from pathlib import Path
@@ -15,6 +16,8 @@ from .model import (
 )
 
 _CONNECTION = TypeAdapter(Connection)
+
+logger = logging.getLogger(__name__)
 
 
 class ParseError(Exception):
@@ -217,6 +220,17 @@ class MapParser:
             name=name, coordinates=coordinates, attributes=attributes
         )
         self._zones[name] = zone
+        # lazy %-args, not an f-string: no __str__ cost when logging is off
+        logger.debug(
+            "line %d: %s %r at (%d, %d), %s, capacity %d",
+            line_nbr,
+            keyword,
+            name,
+            coordinates.x,
+            coordinates.y,
+            attributes.type,
+            zone.capacity,
+        )
 
         if keyword is Keyword.START:
             self._start = zone
@@ -260,10 +274,17 @@ class MapParser:
             raise ParseError(line_nbr, _describe(exc)) from exc
 
         self._connections[pair] = connection
+        logger.debug(
+            "line %d: connection %r, capacity %d",
+            line_nbr,
+            connection.name,
+            connection.capacity,
+        )
 
     # ~~~~~ Main parser and return wrapper ~~~~~
     def parse_file(self) -> Network:
         self._reset()
+        logger.debug("parsing file %s", self._path)
 
         for index, (line_nbr, line_string) in enumerate(self._cleaned_data()):
             # split into keyword and rest

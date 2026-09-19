@@ -9,6 +9,10 @@ VENDOR_DIR := vendor
 # (override with: make run MAP=data/maps/hard/01_maze_nightmare.txt)
 MAP ?= $(DATA_DIR)/maps/easy/01_linear_path.txt
 
+# log verbosity for the run/debug targets: -v for info, -vv for debug
+# (override with: make run V=-vv)
+V ?=
+
 # everything the linters look at
 # (tests are only included once they exist: mypy errors out on a directory
 # that holds no .py files at all)
@@ -36,13 +40,13 @@ TURNIN    := $(DIST_DIR)/$(NAME)_turnin_$(TAG).tar.gz
 install:
 	uv sync
 
-# run the simulator on a map (override with: make run MAP=<path>)
+# run the simulator on a map (override with: make run MAP=<path> V=-vv)
 run:
-	uv run python -m $(PKG) $(MAP)
+	uv run python -m $(PKG) $(V) $(MAP)
 
 # run the simulator under the pdb debugger
 debug:
-	uv run python -m pdb -m $(PKG) $(MAP)
+	uv run python -m pdb -m $(PKG) $(V) $(MAP)
 
 # mypy with the subject's mandatory flags
 mypy:
