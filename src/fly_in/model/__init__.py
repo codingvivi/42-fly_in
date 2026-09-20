@@ -5,7 +5,7 @@ The modules layer strictly downward, so nothing here can form a cycle:
     occupiable  the contract shared by anything a drone can occupy
     zone        a node, plus its coordinates and metadata
     connection  an edge joining exactly two zones
-    network     the whole graph, its drones and their occupancy
+    network     the whole graph, its drones, and its start and end
 
 Import from this package rather than its modules -- the names below are
 the domain's public surface.

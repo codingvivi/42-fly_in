@@ -333,8 +333,6 @@ class MapParser:
                 end=self._end,
                 zones=frozenset(self._zones.values()),
                 connections=frozenset(self._connections.values()),
-                # all drones begin in the start zone
-                occupancy={drone: self._start for drone in self._drones},
             )
         except ValidationError as exc:
             raise ParseError(None, _describe(exc)) from exc

@@ -42,12 +42,6 @@ def test_42_maps_parse(path: Path) -> None:
     for conn in network.connections:
         assert conn.zones <= network.zones, f"unknown zone in {conn.name}"
 
-    # all drones placed (dict key set should be same as set of drones added)
-    assert set(network.occupancy) == network.drones
-
-    # all drones at start after read (set of drone locations == start)
-    assert set(network.occupancy.values()) == {network.start}
-
     # check if drones are present (set of int ids == 1 indexed range set)
     tgt_drones = set(range(1, len(network.drones) + 1))
     assert {d.id for d in network.drones} == tgt_drones
