@@ -15,12 +15,15 @@ class Occupancy:
 
     # allows for occupancy[drone]
     def __getitem__(self, drone: Drone) -> Occupiable:
+        "dunder to get where drone is at"
         return self._at[drone]
 
     def occupants(self, place: Occupiable) -> int:
+        "Get occupants at place"
         return self._counts.get(place, 0)
 
     def has_room(self, place: Occupiable) -> bool:
+        "Check if you can add new drones to this place"
         return self.occupants(place) < place.capacity
 
     def move(self, drone: Drone, target: Occupiable) -> None:
