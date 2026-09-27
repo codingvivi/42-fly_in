@@ -1,9 +1,11 @@
 """Where every drone is, right now."""
 
+from collections.abc import Iterator, Mapping
+
 from .model import Drone, Occupiable, Zone
 
 
-class Occupancy:
+class Occupancy(Mapping[Drone, Occupiable]):
     """A drone -> place mapping"""
 
     def __init__(self, drones: frozenset[Drone], start: Zone) -> None:
@@ -17,6 +19,12 @@ class Occupancy:
     def __getitem__(self, drone: Drone) -> Occupiable:
         "dunder to get where drone is at"
         return self._at[drone]
+
+    def __len__(self) -> int:
+        return len(self._at)
+
+    def __iter__(self) -> Iterator[Drone]:
+        return iter(self._at)
 
     def occupants(self, place: Occupiable) -> int:
         "Get occupants at place"

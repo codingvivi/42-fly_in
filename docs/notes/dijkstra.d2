@@ -1,0 +1,23 @@
+init.{
+  set start cost 0-> set nodes cost infinity -> add start to queue
+}
+
+init -> while queue has members
+
+while queue has members.{
+  get connected-> for each connected
+
+  for each connected.{
+  
+    has been visited? -> cost rn smaller? -> save new cost :yes
+    save new cost -> continue
+
+    has been visited?-> cost = connection + restricted: no
+    cost = connection + restricted -> add to queue with priority
+  }
+}
+
+
+
+
+

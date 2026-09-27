@@ -1,5 +1,10 @@
-from .model import Network, Occupiable
+import sys
+from math import inf
+
+from .model import Network, Zone
 from .occupancy import Occupancy
+
+INF_INT =
 
 
 class Simulation:
@@ -9,6 +14,8 @@ class Simulation:
         occupancy: Occupancy,
     ) -> None:
 
-        self._network: Network = network
-        self._occupancy: Occupancy
-        self._costs: dict[Occupiable, int]
+        self.network: Network = network
+        self.occupancy: Occupancy = occupancy
+
+        self.costs: dict[Zone, int] = {}
+        self.costs[network.start] = 0
