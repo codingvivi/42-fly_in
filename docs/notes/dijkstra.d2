@@ -8,12 +8,13 @@ while queue has members.{
   get connected-> for each connected
 
   for each connected.{
-  
+    cost = connection + restricted -> has been visited?
     has been visited? -> cost rn smaller? -> save new cost :yes
     save new cost -> continue
+    cost rn smaller? -> continue : no
 
-    has been visited?-> cost = connection + restricted: no
-    cost = connection + restricted -> add to queue with priority
+    has been visited?-> add to queue with priority : no
+    add to queue with priority -> save new cost
   }
 }
 

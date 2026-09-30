@@ -1,5 +1,6 @@
 import heapq
 import logging
+from collections.abc import Iterator
 from itertools import count
 from typing import NamedTuple
 
@@ -9,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 class Zone_Pq(NamedTuple):
-    cost: int
+    cost_to: int
     bias: int
     id: int
     zone: Zone
@@ -30,11 +31,9 @@ def shortest_path(
         end = network.end
     logger.info("getting shortest path between %a and %a", start, end)
 
-    costs: dict[Zone, int] = {start: 0}
-
     candidates_pq: list[Zone_Pq] = []
 
-    visited: set[Zone_Pq] = set()
+    best: dict[Zone, VisitStats] = {start: VisitStats(0, None)}
     counter = count()
     # initalize
     candidates_pq = [Zone_Pq(0, 0, next(counter), start, None)]
@@ -42,10 +41,11 @@ def shortest_path(
 
     while candidates_pq:
         curr = heapq.heappop(candidates_pq)
-        visited.add(curr)
         logger.debug("curr: %a", curr)
 
-        neighbors = (
+        # NOT a tuple!
+        # instead: object to lazy querry zones
+        neighbors: Iterator[Zone] = (
             c.connected_to(curr.zone)
             for c in network.connections
             if curr.zone in c.zones
@@ -53,10 +53,28 @@ def shortest_path(
         logger.debug("neighbors: %s", curr)
 
         for n in neighbors:
-            if n in visited:
-                # compare cost
-                ...
+            # cost to current + thru current + thru connection
+            n_cost = curr.cost_to + curr.zone.attributes.type.cost + 1
+
+            if n not in best:
+                bias: int = 0
+                if curr.zone.attributes.type.is_preferred:
+                    bias += 1
+                heapq.heappush(
+                    candidates_pq,
+                    Zone_Pq(n_cost, bias, next(counter), n, curr.zone),
+                )
+            # if already visited and curr worse or equal without priority, skip
             else:
-                n
+                tobeat = best[n].cost
+                if (
+                    n_cost > tobeat
+                    or n_cost == tobeat
+                    and n.attributes.type.is_preferred is False
+                ):
+                    continue
+
+            # else update
+            best[n] = VisitStats(n_cost, curr.zone)
 
     return None

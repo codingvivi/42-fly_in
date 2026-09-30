@@ -16,6 +16,7 @@ class Connection(Occupiable):
     # which would also accept the field's own name,
     # letting a connection take the zone-only 'max_drones'
     max_link_capacity: Capacity = 1
+    cost: int = 1
 
     @property
     def capacity(self) -> Capacity:
