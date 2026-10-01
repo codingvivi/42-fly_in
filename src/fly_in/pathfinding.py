@@ -18,7 +18,7 @@ class Zone_Pq(NamedTuple):
 
 
 class VisitStats(NamedTuple):
-    cost: int
+    cost_to: int
     prev: Zone | None
 
 
@@ -53,8 +53,10 @@ def shortest_path(
         logger.debug("neighbors: %s", curr)
 
         for n in neighbors:
+            logger.debug("process neighbor '%s'", curr)
             # cost to current + thru current + thru connection
             n_cost = curr.cost_to + curr.zone.attributes.type.cost + 1
+            logger.debug("cost from start: %i", curr)
 
             if n not in best:
                 bias: int = 0
@@ -66,7 +68,7 @@ def shortest_path(
                 )
             # if already visited and curr worse or equal without priority, skip
             else:
-                tobeat = best[n].cost
+                tobeat = best[n].cost_to
                 if (
                     n_cost > tobeat
                     or n_cost == tobeat
