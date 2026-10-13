@@ -34,9 +34,9 @@ def shortest_path(
     candidates_pq: list[Zone_Pq] = []
 
     best: dict[Zone, VisitStats] = {start: VisitStats(0, None)}
-    counter = count()
+    tie_breaker = count()
     # initalize
-    candidates_pq = [Zone_Pq(0, 0, next(counter), start, None)]
+    candidates_pq = [Zone_Pq(0, 0, next(tie_breaker), start, None)]
     logger.debug("inited solving queue with %a", candidates_pq)
 
     while candidates_pq:
@@ -55,7 +55,7 @@ def shortest_path(
         for n in neighbors:
             logger.debug("process neighbor '%s'", curr)
             # cost to current + thru current + thru connection
-            n_cost = curr.cost_to + curr.zone.attributes.type.cost + 1
+            n_cost = curr.cost_to + n.attributes.type.cost
             logger.debug("cost from start: %i", curr)
 
             if n not in best:
@@ -64,7 +64,7 @@ def shortest_path(
                     bias += 1
                 heapq.heappush(
                     candidates_pq,
-                    Zone_Pq(n_cost, bias, next(counter), n, curr.zone),
+                    Zone_Pq(n_cost, bias, next(tie_breaker), n, curr.zone),
                 )
             # if already visited and curr worse or equal without priority, skip
             else:
