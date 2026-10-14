@@ -1,6 +1,7 @@
+"""Cheapest route through the network, by Dijkstra's algorithm."""
+
 import heapq
 import logging
-from collections.abc import Iterator
 from itertools import count
 from typing import NamedTuple
 
@@ -8,75 +9,82 @@ from .model import Network, Zone
 
 logger = logging.getLogger(__name__)
 
+# (turns, -priority zones visited)
+# tuple comparison: fewer turns first, then more priority zones
+Cost = tuple[int, int]
+
 
 class Zone_Pq(NamedTuple):
-    cost_to: int
-    bias: int
-    id: int
+    """A heap entry. Field order is sort order."""
+
+    cost_to: Cost
+    # breaks key ties, so two Zones never get compared
+    tie: int
     zone: Zone
-    prev: Zone | None
 
 
-class VisitStats(NamedTuple):
-    cost_to: int
+class Visit(NamedTuple):
+    """Cheapest known way into a zone."""
+
+    cost_to: Cost
     prev: Zone | None
 
 
 def shortest_path(
     network: Network, start: Zone | None = None, end: Zone | None = None
-) -> tuple[Zone]:
+) -> list[Zone] | None:
+    """Return the cheapest path from start to end, both included.
+
+    A move costs the zone type of the zone moved into.
+    Ties in turns go to the path through more priority zones.
+    Returns None if end can't be reached.
+    """
     if start is None:
         start = network.start
     if end is None:
         end = network.end
     logger.info("getting shortest path between %a and %a", start, end)
 
-    candidates_pq: list[Zone_Pq] = []
+    best: dict[Zone, Visit] = {start: Visit((0, 0), None)}
+    tie = count()
+    heap = [Zone_Pq(best[start].cost_to, next(tie), start)]
 
-    best: dict[Zone, VisitStats] = {start: VisitStats(0, None)}
-    tie_breaker = count()
-    # initalize
-    candidates_pq = [Zone_Pq(0, 0, next(tie_breaker), start, None)]
-    logger.debug("inited solving queue with %a", candidates_pq)
+    while heap:
+        cost_to, _, zone = heapq.heappop(heap)
+        logger.debug("inspect %s at %s", zone.name, cost_to)
 
-    while candidates_pq:
-        curr = heapq.heappop(candidates_pq)
-        logger.debug("curr: %a", curr)
+        if cost_to > best[zone].cost_to:
+            logger.debug("was stale! already saved with cost of %s", cost_to)
+            continue
 
-        # NOT a tuple!
-        # instead: object to lazy querry zones
-        neighbors: Iterator[Zone] = (
-            c.connected_to(curr.zone)
-            for c in network.connections
-            if curr.zone in c.zones
-        )
-        logger.debug("neighbors: %s", curr)
+        if zone == end:
+            logger.debug("reached end")
+            return _rebuild(best, end)
 
-        for n in neighbors:
-            logger.debug("process neighbor '%s'", curr)
-            # cost to current + thru current + thru connection
-            n_cost = curr.cost_to + n.attributes.type.cost
-            logger.debug("cost from start: %i", curr)
+        turns, prio_neg = cost_to
+        for n, _conn in network.adjacent[zone]:
+            logger.debug("%a - neighbor '%a' with cost", n, cost_to)
+            n_type = n.attributes.type
 
-            if n not in best:
-                bias: int = 0
-                if curr.zone.attributes.type.is_preferred:
-                    bias += 1
-                heapq.heappush(
-                    candidates_pq,
-                    Zone_Pq(n_cost, bias, next(tie_breaker), n, curr.zone),
-                )
-            # if already visited and curr worse or equal without priority, skip
-            else:
-                tobeat = best[n].cost_to
-                if (
-                    n_cost > tobeat
-                    or n_cost == tobeat
-                    and n.attributes.type.is_preferred is False
-                ):
-                    continue
+            if not n_type.is_passable:
+                logger.debug("not passable, skipping", n)
+                continue
 
-            # else update
-            best[n] = VisitStats(n_cost, curr.zone)
+            n_cost_to = (
+                turns + n_type.cost,
+                prio_neg - int(n_type.is_preferred),
+            )
+            # update best and push together, or the invariant breaks
+            if n not in best or n_cost_to < best[n].cost_to:
+                best[n] = Visit(n_cost_to, zone)
+                heapq.heappush(heap, Zone_Pq(n_cost_to, next(tie), n))
 
     return None
+
+
+def _rebuild(best: dict[Zone, Visit], end: Zone) -> list[Zone]:
+    """Walk prev links back from end, return the path start-first."""
+    path = [end]
+    while (p := best[path[-1]].prev) is not None:
+        path.append(p)
+    return path[::-1]
