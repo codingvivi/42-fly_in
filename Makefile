@@ -29,11 +29,21 @@ DIST_DIR  := dist
 STAGE_DIR := $(DIST_DIR)/$(NAME)_turnin
 TURNIN    := $(DIST_DIR)/$(NAME)_turnin_$(TAG).tar.gz
 
+# doc sources and the files they compile to
+NOTES_DIR := $(DOCS_DIR)notes
+PUML_SRC  := $(wildcard $(NOTES_DIR)/*.puml)
+D2_SRC    := $(wildcard $(NOTES_DIR)/*.d2)
+TYP_SRC   := $(wildcard $(NOTES_DIR)/*.typ)
+PUML_OUT  := $(PUML_SRC:.puml=.png)
+D2_OUT    := $(D2_SRC:.d2=.svg)
+TYP_OUT   := $(TYP_SRC:.typ=.pdf)
+
 .PHONY: install run debug \
         ruff flake8 mypy mypy-strict \
         lint lint-strict lint-all \
         test test-turnin test-all \
         require-tag stage dist tag publish \
+        docs docs-puml docs-d2 docs-typst \
         clean fclean
 
 # install project dependencies
@@ -82,6 +92,32 @@ test:
 test-turnin: lint-strict test
 
 test-all: lint-all test
+
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# docs
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# compile every doc
+docs: docs-puml docs-d2 docs-typst
+
+# plantuml diagrams -> png
+docs-puml: $(PUML_OUT)
+
+# d2 diagrams -> svg
+docs-d2: $(D2_OUT)
+
+# typst notes -> pdf
+docs-typst: $(TYP_OUT)
+
+%.png: %.puml
+	plantuml -tpng $<
+
+%.svg: %.d2
+	d2 $< $@
+
+%.pdf: %.typ
+	typst compile $< $@
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -41,6 +41,11 @@ Thumbs.db
 # not mine
 docs/42
 
+# docs build output (rebuild with: make docs)
+docs/notes/*.png
+docs/notes/*.svg
+docs/notes/*.pdf
+
 # local / personal
 CLAUDE.md
 

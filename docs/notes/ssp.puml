@@ -1,0 +1,57 @@
+@startuml
+title Successive shortest path
+
+start
+
+group Build planning graph
+	- split every zone into in -> out, capacity = max_drones
+	- every connection -> edge both ways, capacity = max_link_capacity
+	- every edge: cost = zone type of zone entered, flow = 0
+	- every edge gets reverse edge (re), capacity 0, cost = -cost
+end group
+
+- best_turns = infinity, best_lanes = none
+
+while (cheapest path start -> end found?) is (yes)
+note right
+	search: Dijkstra / Bellman-Ford / SPFA
+	only edges with residual > 0
+	(residual = capacity - flow, twins included)
+end note
+	group Augment
+		- for every edge on the path: flow += 1, twin.flow -= 1
+		note right
+			taking a twin = undoing part of an earlier lane
+		end note
+	end group
+
+	group Decomposition
+		- copy all flow counts
+		repeat
+			- walk from start, take any edge with copied count > 0
+			- subtract 1 from that edge's copied count
+			- until end is reached -> one lane
+		repeat while (lanes left?) is (yes)
+		->no;
+	end group
+
+	group Score
+		- spread the N drones over the lanes, shortest lanes first
+		- turns = max over lanes (length + drones on lane - 1)
+	end group
+
+	if (turns < best_turns?) then (yes)
+		- best_turns = turns, best_lanes = these lanes
+	else (no)
+		- more lanes no longer help
+		break
+	endif
+endwhile (no: map is full)
+
+group After planning
+	- assign every drone to a lane in best_lanes
+	:move along the lane, wait if the next zone or connection is full;
+end group
+
+stop
+@enduml
