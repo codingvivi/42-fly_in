@@ -14,6 +14,12 @@ logger = logging.getLogger(__name__)
 Cost = tuple[int, int]
 
 
+def entry_cost(zone: Zone) -> Cost:
+    """Cost of moving into zone: its turns, -1 if it's a priority zone."""
+    z_type = zone.attributes.type
+    return (z_type.cost, -int(z_type.is_preferred))
+
+
 class Zone_Pq(NamedTuple):
     """A heap entry. Field order is sort order."""
 
@@ -64,16 +70,13 @@ def shortest_path(
         turns, prio_neg = cost_to
         for n, _conn in network.adjacent[zone]:
             logger.debug("%a - neighbor '%a' with cost", n, cost_to)
-            n_type = n.attributes.type
 
-            if not n_type.is_passable:
+            if not n.attributes.type.is_passable:
                 logger.debug("not passable, skipping", n)
                 continue
 
-            n_cost_to = (
-                turns + n_type.cost,
-                prio_neg - int(n_type.is_preferred),
-            )
+            n_turns, n_prio = entry_cost(n)
+            n_cost_to = (turns + n_turns, prio_neg + n_prio)
             # update best and push together, or the invariant breaks
             if n not in best or n_cost_to < best[n].cost_to:
                 best[n] = Visit(n_cost_to, zone)
