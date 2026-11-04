@@ -3,8 +3,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import NamedTuple
 
+from fly_in.cost import Cost, entry_cost, neg
 from fly_in.model import Network, Zone
-from fly_in.pathfinding import Cost, entry_cost
 
 
 class Side(Enum):
@@ -77,12 +77,17 @@ class Graph:
                     entry_cost(n),
                 )
 
+    def arcs_from(self, node: Node) -> list[Arc]:
+        """Every arc leaving node, twins included; [] if there are none."""
+        # .get, not []: a lookup must not add keys to the defaultdict
+        return self._arcs_from.get(node, [])
+
     def _add_arc(self, tail: Node, head: Node, cap: int, cost: Cost) -> Arc:
         """Add an arc tail -> head and its twin, return the arc."""
         arc = Arc(tail, head, cap, cost)
         # twin starts with no room
         # only opens up once arc carries flow
-        twin = Arc(head, tail, 0, (-cost[0], -cost[1]))
+        twin = Arc(head, tail, 0, neg(cost))
         arc.twin = twin
         twin.twin = arc
 

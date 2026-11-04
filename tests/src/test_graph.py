@@ -17,7 +17,7 @@ from helpers import (
 from fly_in.graph import Arc, Graph, Node, Side
 from fly_in.model import Network
 from fly_in.parser import MapParser
-from fly_in.pathfinding import entry_cost
+from fly_in.cost import entry_cost
 
 MAPS_DIR = Path(__file__).parents[2] / "data" / "maps"
 ALL_MAPS = sorted(MAPS_DIR.glob("*/*.txt"))
@@ -140,8 +140,18 @@ def test_source_and_sink(network: Network) -> None:
     graph = Graph(network)
     assert graph.source == Node(network.start, Side.OUT)
     assert graph.sink == Node(network.end, Side.IN)
-    assert graph._arcs_from[graph.source]
-    assert graph._arcs_from[graph.sink]
+    assert graph.arcs_from(graph.source)
+    assert graph.arcs_from(graph.sink)
+
+
+def test_arcs_from_unknown_node(network: Network) -> None:
+    """No arcs means [], and asking must not add the node to the graph."""
+    graph = Graph(network)
+    before = len(graph._arcs_from)
+    ghost = Node(network.start, Side.IN)
+    graph._arcs_from.pop(ghost)
+    assert graph.arcs_from(ghost) == []
+    assert len(graph._arcs_from) == before - 1
 
 
 # ~~~~~ hand-made maps ~~~~~
