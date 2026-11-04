@@ -19,7 +19,11 @@ class Node(NamedTuple):
     side: Side
 
 
-@dataclass
+# doesn't create __eq__ function
+# without == is True if same object
+# ==  would compare all fields otherwise
+# and endlessly recurse on twin
+@dataclass(eq=False)
 class Arc:
     tail: Node
     head: Node
@@ -42,36 +46,42 @@ class Graph:
     def __init__(self, network: Network):
         self._arcs_from: dict[Node, list[Arc]] = defaultdict(list)
 
+        self.source = Node(network.start, Side.OUT)
+        self.sink = Node(network.end, Side.IN)
+        # no zone can ever hold more than every drone at once
+        nb_drones = len(network.drones)
+
+        # add arcs
         for zone in network.zones:
             if not zone.attributes.type.is_passable:
                 continue
 
-            # leaving thru tail of A, OUT
-            tail = Node(zone, Side.OUT)
-            neighbors = {n[0]: n[1] for n in network.adjacent[zone]}
+            zone_tail = Node(zone, Side.OUT)
+            # add inta-zone arc
+            self._add_arc(
+                Node(zone, Side.IN),
+                zone_tail,
+                min(zone.capacity, nb_drones),
+                (0, 0),
+            )
 
-            arcs: list[Arc] = []
+            # add zone.out -> neighbor.in arc
+            for n, conn in network.adjacent[zone]:
+                if not n.attributes.type.is_passable:
+                    continue
 
-            for n in neighbors:
-                # comin from A, entering thru head of B, IN
-                head = Node(n, Side.IN)
-                cost = entry_cost(n)
-
-                arc = Arc(tail, head, zone.attributes.max_drones, cost)
-
-                twin_cost = (-cost[0], -cost[1])
-                twin_arc = Arc(head, tail, n.attributes.max_drones, twin_cost)
-                arc.twin = twin_arc
-                arc.twin.twin = arc
-
-                arcs.append(arc)
-
-            self._arcs_from[tail] = arcs
+                self._add_arc(
+                    zone_tail,
+                    Node(n, Side.IN),
+                    conn.max_link_capacity,
+                    entry_cost(n),
+                )
 
     def _add_arc(self, tail: Node, head: Node, cap: int, cost: Cost) -> Arc:
         """Add an arc tail -> head and its twin, return the arc."""
         arc = Arc(tail, head, cap, cost)
-        # twin starts with no room: it only opens up once arc carries flow
+        # twin starts with no room
+        # only opens up once arc carries flow
         twin = Arc(head, tail, 0, (-cost[0], -cost[1]))
         arc.twin = twin
         twin.twin = arc

@@ -42,7 +42,6 @@ def main(argv: list[str]) -> int:
     path = Path(argv[CliArgs.PATH])
     try:
         network = MapParser(path).parse_file()
-        network.link()
     except Exception as e:
         # print out extra info
         logger.debug("%s failed to parse", path, exc_info=True)

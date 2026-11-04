@@ -1,10 +1,5 @@
-import sys
-from math import inf
-
 from .model import Network, Zone
 from .occupancy import Occupancy
-
-INF_INT =
 
 
 class Simulation:
