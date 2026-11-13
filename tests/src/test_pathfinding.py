@@ -7,7 +7,7 @@ from fly_in.cost import ZERO, Cost, add, entry_cost, sub
 from fly_in.graph import Arc, Graph, Node, Side
 from fly_in.model import Network
 from fly_in.parser import MapParser
-from fly_in.pathfinding import residual_path, shortest_path
+from fly_in.pathfinding import augment, residual_path, shortest_path
 
 MAPS_DIR = Path(__file__).parents[2] / "data" / "maps"
 ALL_MAPS = sorted(MAPS_DIR.glob("*/*.txt"))
@@ -108,14 +108,7 @@ def _zone_names(graph: Graph, path: list[Arc]) -> list[str]:
     return names
 
 
-# stand-ins for the SSP loop's augment and potential update
-def _augment(path: list[Arc]) -> None:
-    for arc in path:
-        assert arc.twin is not None
-        arc.flow += 1
-        arc.twin.flow -= 1
-
-
+# stand-in for the SSP loop's potential update
 def _update(h: dict[Node, Cost], dist: dict[Node, Cost]) -> None:
     for node, d in dist.items():
         h[node] = add(h.get(node, ZERO), d)
@@ -223,7 +216,7 @@ def test_reroute_through_twin(write_map: WriteMap) -> None:
     first, dist = residual_path(graph, h)
     assert first is not None
     assert _zone_names(graph, first) == ["s", "a", "b", "t"]
-    _augment(first)
+    augment(first)
     _update(h, dist)
 
     second, _ = residual_path(graph, h)
@@ -231,7 +224,7 @@ def test_reroute_through_twin(write_map: WriteMap) -> None:
     assert _zone_names(graph, second) == [
         "s", "x1", "x2", "b", "a", "y1", "y2", "t",
     ]
-    _augment(second)
+    augment(second)
     # the two lanes cross a->b in opposite directions: they cancel out
     assert _a_to_b(graph).flow == 0
     # 4 + 4 turns for s-a-y1-y2-t and s-x1-x2-b-t
@@ -244,7 +237,7 @@ def test_reduced_costs_stay_non_negative(write_map: WriteMap) -> None:
     h: dict[Node, Cost] = {}
     first, dist = residual_path(graph, h)
     assert first is not None
-    _augment(first)
+    augment(first)
     _update(h, dist)
 
     for node in list(graph._arcs_from):
@@ -263,6 +256,43 @@ def test_stale_potentials_raise(write_map: WriteMap) -> None:
     graph = Graph(MapParser(write_map(REROUTE_MAP)).parse_file())
     first, _ = residual_path(graph, {})
     assert first is not None
-    _augment(first)
+    augment(first)
     with pytest.raises(ValueError, match="negative reduced cost"):
         residual_path(graph, {})
+
+
+# ~~~~~ augment ~~~~~
+def test_augment_moves_one_unit(linear_network: Network) -> None:
+    graph = Graph(linear_network)
+    path, _ = residual_path(graph, {})
+    assert path is not None
+    augment(path)
+    for arc in path:
+        assert arc.twin is not None
+        assert arc.flow == 1
+        assert arc.twin.flow == -1
+        # the twin now has room to undo this unit
+        assert arc.twin.residual == 1
+
+
+def test_augment_until_full(linear_network: Network) -> None:
+    """Every augment uses up one unit of the bottleneck."""
+    graph = Graph(linear_network)
+    path, _ = residual_path(graph, {})
+    assert path is not None
+    bottleneck = min(arc.cap for arc in path)
+    for _ in range(bottleneck):
+        path, _ = residual_path(graph, {})
+        assert path is not None
+        augment(path)
+    assert residual_path(graph, {})[0] is None
+
+
+def test_augment_twin_undoes_arc(write_map: WriteMap) -> None:
+    graph = Graph(MapParser(write_map(REROUTE_MAP)).parse_file())
+    a_to_b = _a_to_b(graph)
+    assert a_to_b.twin is not None
+    augment([a_to_b])
+    augment([a_to_b.twin])
+    assert a_to_b.flow == 0
+    assert a_to_b.twin.flow == 0

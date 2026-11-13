@@ -153,6 +153,18 @@ def residual_path(
     return _rebuild_arcs(best, graph.sink), dist
 
 
+def augment(path: list[Arc]) -> None:
+    """Push one drone along path: arc.flow += 1, twin.flow -= 1.
+
+    If run on twin, undoes one unit
+    """
+    for arc in path:
+        # keep mypy happy
+        assert arc.twin is not None
+        arc.flow += 1
+        arc.twin.flow -= 1
+
+
 def _rebuild_arcs(best: dict[Node, ArcVisit], end: Node) -> list[Arc]:
     """Walk the via arcs back from end, return them source-first."""
     path: list[Arc] = []
