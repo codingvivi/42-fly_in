@@ -23,6 +23,9 @@ since connections are exclusively in it.
 
 ##### Network hashmap: drone key vs. location key
 
+### Algorithm
+#### Why undo opposite flows?
+
 ## Visual Representation
 
 ## Example Input and Expected Output
