@@ -296,3 +296,47 @@ def test_augment_twin_undoes_arc(write_map: WriteMap) -> None:
     augment([a_to_b.twin])
     assert a_to_b.flow == 0
     assert a_to_b.twin.flow == 0
+
+
+# ~~~~~ opposing flow ~~~~~
+def _run_ssp(graph: Graph, nb_drones: int) -> None:
+    """Stand-in for the SSP loop: augment until full or one lane a drone."""
+    h: dict[Node, Cost] = {}
+    for _ in range(nb_drones):
+        path, dist = residual_path(graph, h)
+        if path is None:
+            return
+        augment(path)
+        _update(h, dist)
+
+
+@pytest.mark.parametrize(
+    "path", ALL_MAPS, ids=lambda p: f"{p.parent.name}/{p.stem}"
+)
+def test_no_opposing_flow(path: Path) -> None:
+    network = MapParser(path).parse_file()
+    graph = Graph(network)
+    _run_ssp(graph, len(network.drones))
+    assert graph.opposing_flows() == []
+
+
+def test_no_opposing_flow_after_reroute(write_map: WriteMap) -> None:
+    """The map built to make a lane run a->b backwards still ends clean."""
+    network = MapParser(write_map(REROUTE_MAP)).parse_file()
+    graph = Graph(network)
+    _run_ssp(graph, len(network.drones))
+    assert graph.opposing_flows() == []
+
+
+def test_opposing_flow_is_found(write_map: WriteMap) -> None:
+    graph = Graph(MapParser(write_map(REROUTE_MAP)).parse_file())
+    a_to_b = _a_to_b(graph)
+    (b_to_a,) = [
+        arc
+        for arc in graph.arcs()
+        if arc.cap > 0
+        and arc.tail.zone.name == "b"
+        and arc.head.zone.name == "a"
+    ]
+    augment([a_to_b, b_to_a])
+    assert graph.opposing_flows() == [(a_to_b, b_to_a)]

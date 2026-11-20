@@ -1,4 +1,5 @@
 from collections import defaultdict
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import NamedTuple
@@ -81,6 +82,29 @@ class Graph:
         """Every arc leaving node, twins included; [] if there are none."""
         # .get, not []: a lookup must not add keys to the defaultdict
         return self._arcs_from.get(node, [])
+
+    def arcs(self) -> Iterator[Arc]:
+        """Every arc in the graph, twins included."""
+        for arcs in self._arcs_from.values():
+            yield from arcs
+
+    def opposing_flows(self) -> list[tuple[Arc, Arc]]:
+        """Check if two drones cross same path in opposite directions"""
+        # real arcs between zones only: twins have cap 0
+        between = {
+            (arc.tail.zone, arc.head.zone): arc
+            for arc in self.arcs()
+            if arc.cap > 0 and arc.tail.zone != arc.head.zone
+        }
+        pairs: list[tuple[Arc, Arc]] = []
+        for (a, b), arc in between.items():
+            back = between.get((b, a))
+            # (a, b) < (b, a) by name: each pair once
+            if back is None or a.name > b.name:
+                continue
+            if arc.flow > 0 and back.flow > 0:
+                pairs.append((arc, back))
+        return pairs
 
     def _add_arc(self, tail: Node, head: Node, cap: int, cost: Cost) -> Arc:
         """Add an arc tail -> head and its twin, return the arc."""
