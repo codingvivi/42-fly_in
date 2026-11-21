@@ -172,3 +172,51 @@ def _rebuild_arcs(best: dict[Node, ArcVisit], end: Node) -> list[Arc]:
         path.append(arc)
         end = arc.tail
     return path[::-1]
+
+
+# ~~~~~ flow -> lanes ~~~~~
+def decompose(graph: Graph) -> list[list[Zone]]:
+    """Read the flow back as lanes, each a list of zones start to end.
+
+    Walks from source along arcs with flow left, using up one unit per
+    step, until the sink; once per unit leaving the source. The graph's
+    flow is not changed.
+    """
+
+    # get all arcs with flow
+    remaining = {arc: arc.flow for arc in graph.arcs() if arc.flow > 0}
+    nb_lanes = sum(
+        remaining.get(arc, 0) for arc in graph.arcs_from(graph.source)
+    )
+
+    lanes: list[list[Zone]] = []
+    for _ in range(nb_lanes):
+        node = graph.source
+        lane = [node.zone]
+
+        while node != graph.sink:
+            # get remaining arc with flow, or none
+            arc = next(
+                # get a or 0 if a not in remaminig
+                # then skip 0 instead of crashing
+                (a for a in graph.arcs_from(node) if remaining.get(a, 0) > 0),
+                None,  # default if next gets nothing, instead of StopIteration
+            )
+            # arc is none = none of arcs leading node have unused flow
+            # dead ends can never have flow!
+            if arc is None:
+                raise ValueError(f"flow stops at {node}")
+            # remove flow
+            remaining[arc] -= 1
+
+            # z_in -> z_out arcs stay in the same zone
+            # skip adding, to not have zone in there twice
+            if arc.head.zone != arc.tail.zone:
+                lane.append(arc.head.zone)
+            # skip to head of node
+            node = arc.head
+
+        # when sink reached,
+        # add list of zones as lane
+        lanes.append(lane)
+    return lanes

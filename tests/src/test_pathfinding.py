@@ -7,7 +7,12 @@ from fly_in.cost import ZERO, Cost, add, entry_cost, sub
 from fly_in.graph import Arc, Graph, Node, Side
 from fly_in.model import Network
 from fly_in.parser import MapParser
-from fly_in.pathfinding import augment, residual_path, shortest_path
+from fly_in.pathfinding import (
+    augment,
+    decompose,
+    residual_path,
+    shortest_path,
+)
 
 MAPS_DIR = Path(__file__).parents[2] / "data" / "maps"
 ALL_MAPS = sorted(MAPS_DIR.glob("*/*.txt"))
@@ -299,15 +304,19 @@ def test_augment_twin_undoes_arc(write_map: WriteMap) -> None:
 
 
 # ~~~~~ opposing flow ~~~~~
-def _run_ssp(graph: Graph, nb_drones: int) -> None:
-    """Stand-in for the SSP loop: augment until full or one lane a drone."""
+def _run_ssp(graph: Graph, nb_drones: int) -> int:
+    """Stand-in for the SSP loop: augment until full or one lane a drone.
+
+    Returns how many lanes were added.
+    """
     h: dict[Node, Cost] = {}
-    for _ in range(nb_drones):
+    for added in range(nb_drones):
         path, dist = residual_path(graph, h)
         if path is None:
-            return
+            return added
         augment(path)
         _update(h, dist)
+    return nb_drones
 
 
 @pytest.mark.parametrize(
@@ -340,3 +349,84 @@ def test_opposing_flow_is_found(write_map: WriteMap) -> None:
     ]
     augment([a_to_b, b_to_a])
     assert graph.opposing_flows() == [(a_to_b, b_to_a)]
+
+
+# ~~~~~ decompose ~~~~~
+def _lane_names(graph: Graph) -> list[list[str]]:
+    return [[z.name for z in lane] for lane in decompose(graph)]
+
+
+def test_decompose_no_flow(linear_network: Network) -> None:
+    assert decompose(Graph(linear_network)) == []
+
+
+def test_decompose_one_lane_is_shortest_path(
+    linear_network: Network,
+) -> None:
+    graph = Graph(linear_network)
+    _run_ssp(graph, 1)
+    assert decompose(graph) == [shortest_path(linear_network)]
+
+
+def test_decompose_fork_uses_both_branches() -> None:
+    network = MapParser(MAPS_DIR / "easy" / "02_simple_fork.txt").parse_file()
+    graph = Graph(network)
+    assert _run_ssp(graph, 2) == 2
+    lanes = _lane_names(graph)
+    assert {lane[2] for lane in lanes} == {"path_a", "path_b"}
+
+
+def test_decompose_repeats_shared_lane() -> None:
+    """The bottleneck holds 2: the same route comes back as 2 lanes."""
+    network = MapParser(
+        MAPS_DIR / "easy" / "03_basic_capacity.txt"
+    ).parse_file()
+    graph = Graph(network)
+    assert _run_ssp(graph, len(network.drones)) == 2
+    route = ["start", "bottleneck", "wide_area", "goal"]
+    assert _lane_names(graph) == [route, route]
+
+
+def test_decompose_after_reroute(write_map: WriteMap) -> None:
+    """Lanes are the swapped halves, not the routes the searches found."""
+    graph = Graph(MapParser(write_map(REROUTE_MAP)).parse_file())
+    _run_ssp(graph, 2)
+    assert sorted(_lane_names(graph)) == [
+        ["s", "a", "y1", "y2", "t"],
+        ["s", "x1", "x2", "b", "t"],
+    ]
+
+
+def test_decompose_leaves_flow_alone(write_map: WriteMap) -> None:
+    graph = Graph(MapParser(write_map(REROUTE_MAP)).parse_file())
+    _run_ssp(graph, 2)
+    before = [arc.flow for arc in graph.arcs()]
+    decompose(graph)
+    assert [arc.flow for arc in graph.arcs()] == before
+
+
+def test_decompose_dead_end_raises(write_map: WriteMap) -> None:
+    """Flow out of the source that goes nowhere breaks flow in = out."""
+    graph = Graph(MapParser(write_map(REROUTE_MAP)).parse_file())
+    (s_to_a,) = [
+        arc
+        for arc in graph.arcs_from(graph.source)
+        if arc.cap > 0 and arc.head.zone.name == "a"
+    ]
+    augment([s_to_a])
+    with pytest.raises(ValueError, match="flow stops"):
+        decompose(graph)
+
+
+@pytest.mark.parametrize(
+    "path", ALL_MAPS, ids=lambda p: f"{p.parent.name}/{p.stem}"
+)
+def test_decompose_all_maps(path: Path) -> None:
+    network = MapParser(path).parse_file()
+    graph = Graph(network)
+    added = _run_ssp(graph, len(network.drones))
+    lanes = decompose(graph)
+    assert len(lanes) == added
+    for lane in lanes:
+        assert lane[0] == network.start
+        assert lane[-1] == network.end
