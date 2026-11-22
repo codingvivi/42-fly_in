@@ -153,6 +153,16 @@ def residual_path(
     return _rebuild_arcs(best, graph.sink), dist
 
 
+def update_potentials(h: dict[Node, Cost], dist: dict[Node, Cost]) -> None:
+    """Fold one search's distances into h: h[v] += dist[v].
+
+    Nodes the search didn't reach keep their potential; they can't be
+    reached by later searches either, since flow only ever removes room.
+    """
+    for node, d in dist.items():
+        h[node] = add(h.get(node, ZERO), d)
+
+
 def augment(path: list[Arc]) -> None:
     """Push one drone along path: arc.flow += 1, twin.flow -= 1.
 

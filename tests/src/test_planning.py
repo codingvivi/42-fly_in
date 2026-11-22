@@ -1,9 +1,11 @@
+from pathlib import Path
+
 import pytest
 from helpers import WriteMap
 
 from fly_in.model import Network, Zone
 from fly_in.parser import MapParser
-from fly_in.planning import lane_length, score
+from fly_in.planning import lane_length, plan, score
 
 # two routes to goal: s-a-goal (2 turns) and s-l1-...-l9-goal (10 turns),
 # r is restricted and only on the third route s-r-goal (3 turns)
@@ -113,3 +115,74 @@ def test_extra_lane_never_hurts(network: Network) -> None:
 def test_no_lanes_raises() -> None:
     with pytest.raises(ValueError, match="no lanes"):
         score([], 1)
+
+
+# ~~~~~ plan ~~~~~
+MAPS_DIR = Path(__file__).parents[2] / "data" / "maps"
+
+# subject targets: the turn count each map must be solved within
+TARGETS = {
+    "easy/01_linear_path": 6,
+    "easy/02_simple_fork": 8,
+    "easy/03_basic_capacity": 6,
+    "medium/01_dead_end_trap": 12,
+    "medium/02_circular_loop": 15,
+    "medium/03_priority_puzzle": 12,
+    "hard/01_maze_nightmare": 30,
+    "hard/02_capacity_hell": 35,
+    "hard/03_ultimate_challenge": 45,
+    # strictly under 45
+    "challenger/01_the_impossible_dream": 44,
+}
+
+
+def _plan_map(name: str) -> tuple[Network, list[list[str]], int]:
+    network = MapParser(MAPS_DIR / f"{name}.txt").parse_file()
+    p = plan(network)
+    return network, [[z.name for z in lane] for lane in p.lanes], p.turns
+
+
+def test_plan_simple_fork_uses_both_branches() -> None:
+    _, lanes, turns = _plan_map("easy/02_simple_fork")
+    assert sorted(lane[2] for lane in lanes) == ["path_a", "path_b"]
+    assert turns == 4
+
+
+def test_plan_bottleneck_caps_lanes() -> None:
+    """bottleneck has max_drones=2: no more than 2 lanes fit through."""
+    _, lanes, _ = _plan_map("easy/03_basic_capacity")
+    assert len(lanes) == 2
+    assert all("bottleneck" in lane for lane in lanes)
+
+
+def test_plan_one_drone_takes_shortest(network: Network) -> None:
+    p = plan(network)
+    assert [[z.name for z in lane] for lane in p.lanes] == [SHORT]
+    assert p.turns == 2
+
+
+def test_plan_assignment_covers_every_drone() -> None:
+    network, lanes, _ = _plan_map("medium/03_priority_puzzle")
+    p = plan(network)
+    assert len(p.assignment) == len(network.drones)
+    assert set(p.assignment) <= set(range(len(lanes)))
+
+
+def test_plan_unreachable_raises(write_map: WriteMap) -> None:
+    path = write_map(
+        "nb_drones: 1\n"
+        "start_hub: s 0 0\n"
+        "hub: b 1 0 [zone=blocked]\n"
+        "end_hub: t 2 0\n"
+        "connection: s-b\n"
+        "connection: b-t\n"
+    )
+    with pytest.raises(ValueError, match="no route"):
+        plan(MapParser(path).parse_file())
+
+
+@pytest.mark.parametrize("name", sorted(TARGETS))
+def test_plan_meets_target(name: str) -> None:
+    """Predicted turns only; the simulation still has to confirm them."""
+    _, _, turns = _plan_map(name)
+    assert turns <= TARGETS[name]
