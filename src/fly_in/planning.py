@@ -84,8 +84,8 @@ def plan(network: Network) -> Plan:
     best: Plan | None = None
 
     for round_ in range(1, nb_drones + 1):
-        # get cheapest path that still has room
-        # and cost for each node
+        # dijkstra, but on graph (with arcs)
+        # fails if everything full
         path, dist = residual_path(graph, h)
         if path is None:
             logger.info("graph saturated after %d lane(s)", round_ - 1)
