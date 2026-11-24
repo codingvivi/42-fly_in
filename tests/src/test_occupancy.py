@@ -81,3 +81,33 @@ def test_capacity_is_the_declared_one() -> None:
     assert occupancy.occupants(target) == 2
     with pytest.raises(ValueError, match="wide is full"):
         occupancy.move(third, target)
+
+
+def test_move_all_frees_spot_same_turn() -> None:
+    """Leaving and entering a full zone in one turn is fine."""
+    start, a, b = _start(), _zone("a"), _zone("b")
+    occupancy = Occupancy(DRONES, start)
+    first, second, _ = sorted(DRONES, key=lambda d: d.id)
+    occupancy.move(first, a)
+
+    # one by one, second -> a first would be refused: a is still full
+    occupancy.move_all({second: a, first: b})
+
+    assert occupancy[first] is b
+    assert occupancy[second] is a
+    assert occupancy.occupants(a) == 1
+    assert occupancy.occupants(start) == FLEET - 2
+
+
+def test_move_all_overfill_moves_nobody() -> None:
+    """Two drones into a max_drones=1 zone: refused, nothing changes."""
+    start, a, b = _start(), _zone("a"), _zone("b")
+    occupancy = Occupancy(DRONES, start)
+    first, second, third = sorted(DRONES, key=lambda d: d.id)
+
+    with pytest.raises(ValueError, match="a is full"):
+        occupancy.move_all({first: b, second: a, third: a})
+
+    assert all(occupancy[drone] is start for drone in DRONES)
+    assert occupancy.occupants(start) == FLEET
+    assert occupancy.occupants(b) == 0

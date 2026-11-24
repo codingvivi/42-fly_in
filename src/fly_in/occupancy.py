@@ -5,6 +5,8 @@ from collections.abc import Iterator, Mapping
 from .model import Drone, Occupiable, Zone
 
 
+# mapping has no __setitem__
+# unless you define it you cant assign with occupancy[drone] = zone
 class Occupancy(Mapping[Drone, Occupiable]):
     """A drone -> place mapping"""
 
@@ -43,3 +45,31 @@ class Occupancy(Mapping[Drone, Occupiable]):
         self._counts[origin] -= 1
         self._counts[target] = self._counts.get(target, 0) + 1
         self._at[drone] = target
+
+    def move_all(self, moves: Mapping[Drone, Occupiable]) -> None:
+        """Apply one turn's moves at once, refusing any that overfill.
+
+        All drones move at the same time, so a drone leaving a place frees
+        its spot for one arriving there in the same turn. All or nothing:
+        if any place would end up over capacity, no drone moves.
+        """
+        counts = dict(self._counts)
+
+        # update counts
+        # get mapping tuple
+        for drone, target in moves.items():
+            # update counts
+            counts[self._at[drone]] -= 1
+            # if the zone is not visited & has no curr value yet, use 0
+            counts[target] = counts.get(target, 0) + 1
+
+        for target in set(moves.values()):
+            if counts[target] > target.capacity:
+                raise ValueError(f"{target.name} is full")
+
+        # overwrite counts dict
+        self._counts = counts
+
+        # move actual drones
+        for drone, target in moves.items():
+            self._at[drone] = target
