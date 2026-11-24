@@ -16,10 +16,10 @@ def test_flights_simple_fork() -> None:
     result = flights(network, plan(network))
 
     assert [f.drone.id for f in result] == [1, 2, 3, 4]
-    assert sorted(f.departs for f in result) == [1, 1, 2, 2]
+    assert sorted(f.departure_turn for f in result) == [1, 1, 2, 2]
     by_branch: dict[str, list[int]] = {}
     for f in result:
-        by_branch.setdefault(f.lane[2].name, []).append(f.departs)
+        by_branch.setdefault(f.lane[2].name, []).append(f.departure_turn)
     assert sorted(by_branch) == ["path_a", "path_b"]
     assert all(sorted(d) == [1, 2] for d in by_branch.values())
 
@@ -32,4 +32,7 @@ def test_flights_land_when_planned(path: Path) -> None:
     result = flights(network, p)
 
     assert len(result) == len(network.drones)
-    assert max(lane_length(f.lane) + f.departs - 1 for f in result) == p.turns
+    assert (
+        max(lane_length(f.lane) + f.departure_turn - 1 for f in result)
+        == p.turns
+    )
