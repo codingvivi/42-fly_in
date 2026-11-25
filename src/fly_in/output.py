@@ -36,6 +36,8 @@ COLORS: dict[str, int] = {
 # "rainbow" gets one of these per letter
 RAINBOW = (196, 208, 226, 40, 33, 129)
 
+DRONE_KEY = 0
+
 
 def _fg(code: int) -> str:
     return f"\033[38;5;{code}m"
@@ -45,6 +47,7 @@ def paint(text: str, color: str | None) -> str:
     """Wrap text in the ANSI code for a map color; unknown -> unchanged."""
     if color is None:
         return text
+
     name = color.lower()
     if name == "rainbow":
         return (
@@ -54,9 +57,11 @@ def paint(text: str, color: str | None) -> str:
             )
             + RESET
         )
+
     code = COLORS.get(name)
     if code is None:
         return text
+
     return f"{_fg(code)}{text}{RESET}"
 
 
@@ -68,7 +73,8 @@ def format_turn(turn: Turn, color: bool = False) -> str:
     connections are dimmed; the text itself is the same either way.
     """
     parts: list[str] = []
-    for drone, place in sorted(turn.items(), key=lambda kv: kv[0].id):
+    # sort by drone ID
+    for drone, place in sorted(turn.items(), key=lambda kv: kv[DRONE_KEY].id):
         name = place.name
         if color:
             if isinstance(place, Zone):
@@ -101,20 +107,23 @@ class Stats(NamedTuple):
 
 def stats(log: list[Turn], plan: Plan) -> Stats:
     """Compute the stats of a finished run from its turn log and plan."""
-    # a drone lands on the last turn it moves
     landed: dict[int, int] = {}
     for turn_nbr, turn in enumerate(log, start=1):
+        # Loop and write until drone disappears
+        # to get landing turn
         for drone in turn:
             landed[drone.id] = turn_nbr
 
     drones = len(landed)
+
     moves = sum(len(turn) for turn in log)
+
     return Stats(
         turns=len(log),
         drones=drones,
-        lanes=len(set(plan.assignment)),
+        lanes=len(set(plan.assignment)),  # remove dupes
         avg_turns=sum(landed.values()) / drones if drones else 0.0,
-        avg_moves=moves / len(log) if log else 0.0,
+        avg_moves=moves / len(log) if log else 0.0,  # moves / turns
         path_cost=sum(lane_length(plan.lanes[i]) for i in plan.assignment),
     )
 
